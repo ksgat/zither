@@ -62,6 +62,25 @@ describe.runIf(!!executable)('Haskell → Onshape edits', () => {
       .mockResolvedValueOnce(reply()).mockResolvedValueOnce(Response.json(after));
     expect(await client(fetcher).edit(edit)).toMatchObject({ featureStatus: 'UNVERIFIED' });
   });
+  it('requires complete feature states to verify a rebuild', async () => {
+    const after = { ...rebuilt(), featureStates: {} };
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(list()))
+      .mockResolvedValueOnce(reply()).mockResolvedValueOnce(Response.json(after));
+    expect(await client(fetcher).edit(edit)).toMatchObject({ featureStatus: 'UNVERIFIED' });
+  });
+  it('does not blame an unchanged pre-existing downstream failure on this edit', async () => {
+    const before = list(), after = rebuilt();
+    before.featureStates.fillet1.featureStatus = 'ERROR'; after.featureStates.fillet1.featureStatus = 'ERROR';
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(before))
+      .mockResolvedValueOnce(reply()).mockResolvedValueOnce(Response.json(after));
+    expect(await client(fetcher).edit(edit)).toMatchObject({ featureStatus: 'OK' });
+  });
+  it('does not verify against a later browser microversion', async () => {
+    const after = rebuilt(); after.sourceMicroversion = 'm3';
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(list()))
+      .mockResolvedValueOnce(reply()).mockResolvedValueOnce(Response.json(after));
+    expect(await client(fetcher).edit(edit)).toMatchObject({ featureStatus: 'UNVERIFIED' });
+  });
   it('does not retry a write whose response is lost', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(list())).mockRejectedValueOnce(new Error('timeout'));
     await expect(client(fetcher).edit(edit)).rejects.toMatchObject({ code: 'write_outcome_unknown' });

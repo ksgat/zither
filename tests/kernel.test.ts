@@ -19,6 +19,8 @@ it('pins the complete official operation catalog and all referenced schemas', ()
   expect(operations).toHaveLength(source.operations);
   expect(Object.keys(spec.components.schemas)).toHaveLength(source.schemas);
   for (const op of operations as any[]) expect(generated).toContain(`Operation "${op.operationId}"`);
+  const refs = JSON.stringify(spec).matchAll(/"\$ref":"#\/components\/schemas\/([^"]+)"/g);
+  for (const [, name] of refs) expect(spec.components.schemas[name]).toBeDefined();
 });
 it.runIf(!!executable)('runs the actual Haskell tree importer and compiler across the process boundary', async () => {
   const kernel = haskellKernel(executable!);
