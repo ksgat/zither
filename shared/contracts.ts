@@ -34,6 +34,14 @@ export type ParameterEdit = z.infer<typeof editSchema>;
 export type FeatureParameter = { id: string; expression: string };
 export type Feature = { id: string; name: string; type: string; suppressed: boolean; parameters: FeatureParameter[] };
 export type FeatureSnapshot = { microversion: string; features: Feature[] };
+export type EditResult = {
+  featureId: string; parameterId: string; before: string; after: string;
+  featureStatus: string; message: string; snapshot: FeatureSnapshot | null;
+};
+export interface CadClient {
+  inspect(target: OnshapeTarget, signal?: AbortSignal): Promise<FeatureSnapshot>;
+  edit(edit: ParameterEdit, signal?: AbortSignal): Promise<EditResult>;
+}
 export type ModelOption = { provider: string; id: string; name: string };
 export type PublicState = {
   serverUrl: string;
@@ -43,11 +51,14 @@ export type PublicState = {
   model: ModelOption | null;
   target: OnshapeTarget | null;
   busy: boolean;
+  serverError?: string;
 };
 export type ChatEvent =
   | { type: 'text'; id: string; delta: string }
   | { type: 'activity'; id: string; name: string; status: 'running' | 'done' | 'error'; detail?: string }
   | { type: 'error'; message: string }
+  | { type: 'snapshot'; snapshot: FeatureSnapshot }
+  | { type: 'auth'; id: string; message: string }
   | { type: 'done' };
 export interface DesktopBridge {
   state(): Promise<PublicState>;
@@ -62,6 +73,7 @@ export interface DesktopBridge {
   setModel(model: ModelOption): Promise<void>;
   saveKey(provider: string, key: string): Promise<void>;
   loginChatGPT(): Promise<void>;
+  answerAuth(id: string, value: string): Promise<void>;
   removeProvider(provider: string): Promise<void>;
   prompt(text: string): Promise<void>;
   stop(): Promise<void>;
