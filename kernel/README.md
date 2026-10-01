@@ -5,13 +5,18 @@ tree and compiles small instructions into revision-bound updates. It has no mode
 credentials, network calls, or geometry guesses.
 
 ```
-Pi: set_parameter(featureId, parameterId, expression)
+Pi: set_parameter(elementId, featureId, parameterId, expression)
   → gateway fetches full current feature JSON
   → Haskell imports ordered history and nested ownership
   → Haskell checks the observed revision and patches one existing expression
   → gateway submits the preserved feature with rejectMicroversionSkew
   → gateway reads back the expression and checks rebuild states
 ```
+
+The desktop agent discovers tabs within the user-selected document and keys each
+observation by element ID. After a write it discards observations of other tabs.
+Each kernel invocation still receives one complete Part Studio tree; document
+discovery does not flatten trees or infer dependencies between Part Studios.
 
 The tree retains source JSON, including sketch constraints, query structures,
 subfeatures, custom namespaces, and fields we do not understand. The model sees

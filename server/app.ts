@@ -7,7 +7,7 @@ import { z } from 'zod';
 import type { auth as authType } from './auth.js';
 import type { desktopSessions } from './sessions.js';
 import type { onshapeConnections } from './connections.js';
-import { targetSchema, editSchema } from '../shared/contracts.js';
+import { targetSchema, workspaceSchema, onshapeId, documentSearchSchema, editSchema } from '../shared/contracts.js';
 import { AppError } from '../shared/errors.js';
 
 export function createApp(auth: typeof authType, sessions: ReturnType<typeof desktopSessions>,
@@ -67,6 +67,21 @@ export function createApp(auth: typeof authType, sessions: ReturnType<typeof des
     const user = await sessions.user(req.headers.authorization);
     await connections.disconnect(user.id);
     res.json({ ok: true });
+  });
+  app.post('/api/cad/documents', async (req, res) => {
+    const user = await sessions.user(req.headers.authorization);
+    const search = documentSearchSchema.parse(req.body);
+    res.json(await (await connections.client(user.id)).documents(search));
+  });
+  app.post('/api/cad/document', async (req, res) => {
+    const user = await sessions.user(req.headers.authorization);
+    const input = z.object({ documentId: onshapeId, workspaceId: onshapeId.optional() }).strict().parse(req.body);
+    res.json(await (await connections.client(user.id)).document(input.documentId, input.workspaceId));
+  });
+  app.post('/api/cad/elements', async (req, res) => {
+    const user = await sessions.user(req.headers.authorization);
+    const workspace = workspaceSchema.parse(req.body);
+    res.json(await (await connections.client(user.id)).elements(workspace));
   });
   app.post('/api/cad/features', async (req, res) => {
     const user = await sessions.user(req.headers.authorization);
