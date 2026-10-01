@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, net, protocol, session, shell } fr
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { z } from 'zod';
-import { parseOnshapeUrl, targetUrl, type ChatEvent, type ModelOption, type OnshapeTarget, type PublicState } from '../shared/contracts.js';
+import { documentSearchSchema, onshapeId, parseOnshapeUrl, targetUrl, type CadDocument, type DocumentSearch, type ChatEvent, type ModelOption, type OnshapeTarget, type PublicState } from '../shared/contracts.js';
 import { AppError, messageOf } from '../shared/errors.js';
 import { Store } from './store.js';
 import { serverApi } from './api.js';
@@ -38,6 +38,7 @@ async function start() {
   const api = serverApi(serverUrl, () => store.get<string>('session'));
   const providers = modelConnections(store);
   let target: OnshapeTarget | null = null;
+  let document: CadDocument | null = null;
   let selection = store.get<ModelOption>('model') ?? null;
   let agent: ReturnType<typeof cadAgent> | undefined;
   let busy = false;
@@ -53,7 +54,10 @@ async function start() {
   window.webContents.on('will-attach-webview', event => event.preventDefault());
   app.on('second-instance', () => { if (window.isMinimized()) window.restore(); window.focus(); });
   window.on('closed', () => { authController?.abort(); agent?.stop(); app.quit(); });
-  const emit = (event: ChatEvent) => { if (!window.isDestroyed()) window.webContents.send('zither:event', event); };
+  const emit = (event: ChatEvent) => {
+    if (event.type === 'snapshot') target = event.target;
+    if (!window.isDestroyed()) window.webContents.send('zither:event', event);
+  };
   const codex = codexLogin(url => shell.openExternal(url), id => emit({ type: 'auth_prompt', id }));
 
   async function browserAuth(action: (signal: AbortSignal) => Promise<void>) {
@@ -66,12 +70,12 @@ async function start() {
     if (store.get<string>('session')) {
       try { ({ user, onshapeConnected } = await api.request<{ user: PublicState['user']; onshapeConnected: boolean }>('/api/session')); }
       catch (error) {
-        if (error instanceof AppError && error.status === 401) { store.set('session', undefined); target = null; agent = undefined; }
+        if (error instanceof AppError && error.status === 401) { store.set('session', undefined); document = null; target = null; agent = undefined; }
         serverError = messageOf(error);
       }
     }
     return { serverUrl, user, onshapeConnected, providers: (await store.credentials.list()).map(p => p.providerId),
-      model: selection, target, busy, serverError };
+      model: selection, document, target, busy, serverError };
   }
   const methods: Record<string, (...args: never[]) => unknown> = {
     state: publicState,
@@ -85,24 +89,44 @@ async function start() {
           await shell.openExternal(url.href);
           const returned = await callback.result;
           const result = await api.request<{ token: string }>('/desktop/exchange', { code: returned.searchParams.get('code'), verifier, redirectUri: callback.redirectUri }, 'POST', signal);
-          store.set('session', result.token); target = null; agent = undefined;
+          store.set('session', result.token); document = null; target = null; agent = undefined;
         } finally { callback.close(); }
       });
     },
     async signOut() {
       await api.request('/api/session/signout', {});
-      store.set('session', undefined); target = null; agent = undefined;
+      store.set('session', undefined); document = null; target = null; agent = undefined;
     },
     async connectOnshape() {
       const { url } = await api.request<{ url: string }>('/api/onshape/connect', {});
       if (new URL(url).origin !== serverUrl || new URL(url).pathname !== '/onshape/connect') throw new Error('Invalid Onshape connection URL.');
       await shell.openExternal(url);
     },
-    async disconnectOnshape() { await api.request('/api/onshape', undefined, 'DELETE'); target = null; agent = undefined; },
-    async setTarget(url: string) {
-      const next = parseOnshapeUrl(z.string().max(4096).parse(url));
+    async disconnectOnshape() { await api.request('/api/onshape', undefined, 'DELETE'); document = null; target = null; agent = undefined; },
+    documents(search: DocumentSearch) { return api.cad.documents(documentSearchSchema.parse(search)); },
+    async openDocument(documentId: string) {
+      const next = await api.cad.document(onshapeId.parse(documentId));
+      document = next; target = null; agent = undefined;
+    },
+    closeDocument() { document = null; target = null; agent = undefined; },
+    async selectElement(elementId: string) {
+      onshapeId.parse(elementId);
+      if (!document?.elements.some(element => element.id === elementId && element.elementType === 'PARTSTUDIO')) {
+        throw new Error('Choose a Part Studio in the selected document.');
+      }
+      const next = { documentId: document.documentId, workspaceId: document.workspaceId, elementId };
       const snapshot = await api.cad.inspect(next);
       target = next; agent = undefined;
+      return snapshot;
+    },
+    async setTarget(url: string) {
+      const next = parseOnshapeUrl(z.string().max(4096).parse(url));
+      const doc = await api.cad.document(next.documentId, next.workspaceId);
+      if (!doc.elements.some(element => element.id === next.elementId && element.elementType === 'PARTSTUDIO')) {
+        throw new Error('The link must point to a Part Studio in this document.');
+      }
+      const snapshot = await api.cad.inspect(next);
+      document = doc; target = next; agent = undefined;
       return snapshot;
     },
     async inspect() { if (!target) throw new Error('Choose a Part Studio first.'); return api.cad.inspect(target); },
@@ -151,7 +175,7 @@ async function start() {
     const senderUrl = event.senderFrame.url;
     if (devUrl ? new URL(senderUrl).origin !== devUrl : senderUrl !== 'zither://app/index.html') return { error: 'Invalid sender origin.' };
     if (typeof method !== 'string' || !Object.hasOwn(methods, method) || !Array.isArray(args)) return { error: 'Unknown operation.' };
-    const mutates = !['state', 'stop', 'openOnshape', 'submitCodexCallback'].includes(method);
+    const mutates = !['state', 'models', 'documents', 'stop', 'openOnshape', 'submitCodexCallback'].includes(method);
     if (mutates && (busy || changing)) return { error: 'Finish or stop the current operation first.' };
     if (mutates) changing = true;
     try { return { value: await methods[method](...args as never[]) }; }
