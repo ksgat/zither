@@ -57,6 +57,7 @@ export type ChatEvent =
   | { type: 'text'; id: string; delta: string }
   | { type: 'activity'; id: string; name: string; status: 'running' | 'done' | 'error'; detail?: string }
   | { type: 'error'; message: string }
+  | { type: 'auth_prompt'; id: string | null }
   | { type: 'snapshot'; snapshot: FeatureSnapshot }
   | { type: 'done' };
 export interface DesktopBridge {
@@ -71,7 +72,8 @@ export interface DesktopBridge {
   models(): Promise<ModelOption[]>;
   setModel(model: ModelOption): Promise<void>;
   saveKey(provider: string, key: string): Promise<void>;
-  loginChatGPT(): Promise<void>;
+  loginCodex(): Promise<void>;
+  submitCodexCallback(id: string, value: string): Promise<void>;
   removeProvider(provider: string): Promise<void>;
   prompt(text: string): Promise<void>;
   stop(): Promise<void>;
