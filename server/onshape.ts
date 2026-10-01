@@ -1,39 +1,23 @@
 import { z } from 'zod';
 import { targetSchema, editSchema, type EditResult, type FeatureSnapshot, type OnshapeTarget, type ParameterEdit } from '../shared/contracts.js';
 import { AppError } from '../shared/errors.js';
+import { unavailableKernel, type CadKernel } from './kernel.js';
 
 // Preserve the complete feature payload, including fields unknown to this client.
-const parameterSchema = z.object({ parameterId: z.string(), expression: z.string().optional() }).passthrough();
-const featureSchema = z.object({
-  featureId: z.string(), name: z.string(), featureType: z.string(),
-  suppressed: z.boolean().optional(), parameters: z.array(parameterSchema).default([]),
-}).passthrough();
 export const featureListSchema = z.object({
-  features: z.array(featureSchema), sourceMicroversion: z.string().min(1),
+  features: z.array(z.record(z.string(), z.unknown())), sourceMicroversion: z.string().min(1),
   serializationVersion: z.string().min(1), libraryVersion: z.number().optional(),
 }).passthrough();
 type FeatureList = z.infer<typeof featureListSchema>;
-
-export function summarizeFeatures(list: FeatureList): FeatureSnapshot {
-  return { microversion: list.sourceMicroversion, features: list.features.map(f => ({
-    id: f.featureId, name: f.name, type: f.featureType, suppressed: f.suppressed ?? false,
-    parameters: f.parameters.filter(p => typeof p.expression === 'string').map(p => ({ id: p.parameterId, expression: p.expression! })),
-  })) };
-}
-export function buildParameterUpdate(list: FeatureList, edit: ParameterEdit) {
-  if (list.sourceMicroversion !== edit.expectedMicroversion) throw new AppError('stale_workspace', 'The Part Studio changed. Read its features again before editing.', 409);
-  const feature = structuredClone(list.features.find(f => f.featureId === edit.featureId));
-  if (!feature) throw new Error('Feature not found in the current Part Studio.');
-  const parameter = feature.parameters.find(p => p.parameterId === edit.parameterId);
-  if (!parameter || typeof parameter.expression !== 'string') throw new Error('This parameter does not support expression edits.');
-  parameter.expression = edit.expression;
-  return { feature, sourceMicroversion: list.sourceMicroversion,
-    serializationVersion: list.serializationVersion, libraryVersion: list.libraryVersion,
-    rejectMicroversionSkew: true };
+function failedFeatures(list: FeatureList): string[] | null {
+  const states = z.record(z.string(), z.object({ featureStatus: z.string() }).passthrough()).safeParse(list.featureStates);
+  if (!states.success || list.features.some(feature => typeof feature.featureId !== 'string' || !states.data[feature.featureId])) return null;
+  return Object.entries(states.data).filter(([, state]) => !['OK', 'SUPPRESSED'].includes(state.featureStatus)).map(([id]) => id);
 }
 
 export class OnshapeClient {
-  constructor(private accessToken: string, private version = 'v9', private fetcher: typeof fetch = fetch) {}
+  constructor(private accessToken: string, private version = 'v17', private fetcher: typeof fetch = fetch,
+    private kernel: CadKernel = unavailableKernel) {}
   private path(t: OnshapeTarget) {
     targetSchema.parse(t);
     return `/partstudios/d/${t.documentId}/w/${t.workspaceId}/e/${t.elementId}`;
@@ -53,10 +37,10 @@ export class OnshapeClient {
         : 'Could not reach Onshape.', 502);
     }
     if (!response.ok) {
-      if (response.status === 429) throw new Error('Onshape API limit reached. Wait before trying again.');
-      if (response.status === 401) throw new Error('Onshape authorization expired. Reconnect Onshape.');
-      if (response.status === 403) throw new Error('Onshape denied access. Check document permissions and OAuth read/write scopes.');
-      if (response.status === 409) throw new Error('The Part Studio changed. Read its features again before editing.');
+      if (response.status === 429) throw new AppError('rate_limit', 'Onshape API limit reached. Wait before trying again.', 429);
+      if (response.status === 401) throw new AppError('expired_connection', 'Onshape authorization expired. Reconnect Onshape.', 401);
+      if (response.status === 403) throw new AppError('access_denied', 'Onshape denied access. Check document permissions and OAuth read/write scopes.', 403);
+      if (response.status === 409) throw new AppError('stale_workspace', 'The Part Studio changed. Read its features again before editing.', 409);
       if (body && response.status >= 500) throw new AppError('write_outcome_unknown', 'Onshape failed during an edit. Inspect the workspace before issuing another edit.', 502);
       throw new Error(`Onshape request failed (${response.status}). Check that the link points to a Part Studio.`);
     }
@@ -64,20 +48,34 @@ export class OnshapeClient {
     catch { throw new AppError(body ? 'write_outcome_unknown' : 'invalid_response', 'Onshape returned an unreadable response. Inspect the workspace before continuing.', 502); }
   }
   async read(target: OnshapeTarget, signal?: AbortSignal) { return featureListSchema.parse(await this.request(`${this.path(target)}/features`, undefined, signal)); }
-  async inspect(target: OnshapeTarget, signal?: AbortSignal) { return summarizeFeatures(await this.read(target, signal)); }
+  async inspect(target: OnshapeTarget, signal?: AbortSignal) { return this.kernel.inspect(await this.read(target, signal), signal); }
   async edit(input: ParameterEdit, signal?: AbortSignal): Promise<EditResult> {
     const edit = editSchema.parse(input);
     const list = await this.read(edit.target, signal);
-    const body = buildParameterUpdate(list, edit);
-    const before = list.features.find(f => f.featureId === edit.featureId)!.parameters.find(p => p.parameterId === edit.parameterId)!.expression!;
-    const result = await this.request(`${this.path(edit.target)}/features/featureid/${encodeURIComponent(edit.featureId)}`, body, signal);
-    const status = result?.featureState?.featureStatus;
+    const plan = await this.kernel.compile(list, edit, signal);
+    const before = plan.changes[0].before;
+    if (!plan.changed) return { featureId: edit.featureId, parameterId: edit.parameterId, before, after: edit.expression,
+      featureStatus: 'UNCHANGED', message: 'The expression already matches. No write was made.', snapshot: await this.kernel.inspect(list, signal) };
+    const result = await this.request(`${this.path(edit.target)}/features/featureid/${encodeURIComponent(edit.featureId)}`, plan.body, signal);
+    let status = typeof result?.featureState?.featureStatus === 'string' ? result.featureState.featureStatus as string : 'UNKNOWN';
     // An HTTP 200 can still represent a broken CAD feature. Never call it a successful rebuild.
     // A failed follow-up read does not turn an acknowledged write into a retryable failure.
-    const snapshot = await this.inspect(edit.target, signal).catch(() => null);
+    let snapshot: FeatureSnapshot | null = null;
+    try {
+      const after = await this.read(edit.target, signal);
+      snapshot = await this.kernel.inspect(after, signal);
+      const observed = snapshot.features.find(f => f.id === edit.featureId)?.parameters.find(p => p.id === edit.parameterId)?.expression;
+      if (status === 'OK' && (observed !== edit.expression || snapshot.microversion === list.sourceMicroversion || result.microversionSkew === true ||
+        (typeof result.sourceMicroversion === 'string' && result.sourceMicroversion !== snapshot.microversion))) status = 'UNVERIFIED';
+      const previousFailures = failedFeatures(list), currentFailures = failedFeatures(after);
+      if (status === 'OK' && (!previousFailures || !currentFailures)) status = 'UNVERIFIED';
+      if (status === 'OK' && currentFailures!.some(id => id === edit.featureId || !previousFailures!.includes(id))) status = 'DOWNSTREAM_ERROR';
+    } catch { if (status === 'OK') status = 'UNVERIFIED'; }
     return { featureId: edit.featureId, parameterId: edit.parameterId, before, after: edit.expression,
-      featureStatus: typeof status === 'string' ? status : 'UNKNOWN',
-      message: status === 'OK' ? 'Parameter updated and feature rebuilt.' : 'The edit was submitted, but the feature did not report an OK rebuild. Inspect Onshape before continuing.',
+      featureStatus: status,
+      message: status === 'OK' ? 'Parameter updated, read back, and feature rebuilt.'
+        : status === 'DOWNSTREAM_ERROR' ? 'The parameter changed, but the feature tree now reports a rebuild problem. Inspect Onshape before continuing.'
+        : 'The edit was submitted, but a successful rebuild and read-back could not be verified. Inspect Onshape before continuing.',
       snapshot };
   }
 }

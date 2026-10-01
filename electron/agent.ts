@@ -39,8 +39,9 @@ export function cadAgent(model: Model<Api>, streamFn: StreamFn, cad: CadClient, 
             const result = await cad.edit({ target, ...args, expectedMicroversion: snapshot.microversion }, signal);
             snapshot = result.snapshot;
             if (snapshot) emit({ type: 'snapshot', snapshot });
-            halted = result.featureStatus !== 'OK' || !snapshot;
-            return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result, isError: result.featureStatus !== 'OK' };
+            const accepted = ['OK', 'UNCHANGED'].includes(result.featureStatus);
+            halted = !accepted || !snapshot;
+            return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result, isError: !accepted };
           } catch (error) { snapshot = null; halted = true; throw error; }
         },
       },

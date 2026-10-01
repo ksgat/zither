@@ -3,12 +3,13 @@ import type { Pool } from 'pg';
 import { AppError } from '../shared/errors.js';
 import { createVault, digest, randomToken } from './security.js';
 import { OnshapeClient } from './onshape.js';
+import { unavailableKernel, type CadKernel } from './kernel.js';
 
 const tokenSchema = z.object({ access_token: z.string().min(1), refresh_token: z.string().optional(), expires_in: z.coerce.number().positive() });
 type Tokens = { access: string; refresh: string; expires: number };
 type Config = { origin: string; clientId: string; clientSecret: string; encryptionKey: string; apiVersion: string };
 
-export function onshapeConnections(db: Pool, config: Config, fetcher: typeof fetch = fetch) {
+export function onshapeConnections(db: Pool, config: Config, fetcher: typeof fetch = fetch, kernel: CadKernel = unavailableKernel) {
   const vault = createVault(config.encryptionKey);
   const callback = `${config.origin}/onshape/callback`;
 
@@ -67,7 +68,7 @@ export function onshapeConnections(db: Pool, config: Config, fetcher: typeof fet
           await connection.query('UPDATE onshape_connections SET credentials=$2, updated_at=now() WHERE user_id=$1', [userId, vault.seal(tokens, userId)]);
         }
         await connection.query('COMMIT');
-        return new OnshapeClient(tokens.access, config.apiVersion, fetcher);
+        return new OnshapeClient(tokens.access, config.apiVersion, fetcher, kernel);
       } catch (error) {
         await connection.query('ROLLBACK');
         throw error;
