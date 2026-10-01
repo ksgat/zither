@@ -29,8 +29,8 @@ describeOperation spec name = case filter ((== name) . operationId) operations o
       let names = filter (\key -> not (K.member key seen)) (refs value)
           found = K.fromList [(key, v) | key <- names, Just v <- [K.lookup key schemas]]
       in reachable schemas (K.elems found ++ rest) (K.union seen found)
-    refs (Object o) = case K.lookup "$ref" o of
-      Just (String ref) | Just name' <- T.stripPrefix "#/components/schemas/" ref -> [Key.fromText name']
-      _ -> concatMap refs (K.elems o)
+    -- Discriminator mappings use schema URI strings without a $ref wrapper.
+    refs (Object o) = concatMap refs (K.elems o)
     refs (Array values) = concatMap refs values
+    refs (String ref) | Just name' <- T.stripPrefix "#/components/schemas/" ref = [Key.fromText name']
     refs _ = []

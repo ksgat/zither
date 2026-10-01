@@ -41,6 +41,7 @@ it.runIf(!!executable)('imports documented operations and resolves their request
   expect(result.method).toBe('POST');
   expect(result.schemas['BTFeatureDefinitionCall-1406'].properties.rejectMicroversionSkew).toBeDefined();
   expect(result.schemas['BTMFeature-134']).toBeDefined();
+  expect(result.schemas['BTMSketch-151']).toBeDefined();
   const assembly = await kernelRequest(executable!, { action: 'catalog', operationId: 'getAssemblyDefinition' }) as any;
   expect(assembly.method).toBe('GET');
   await expect(kernelRequest(executable!, { action: 'catalog', operationId: 'invented' })).rejects.toThrow('Unknown');

@@ -35,7 +35,7 @@ importTree :: Value -> Either String Tree
 importTree = parseEither $ withObject "feature list" $ \o -> do
   revision <- o .: "sourceMicroversion" >>= nonempty
   _ <- (o .: "serializationVersion" >>= nonempty) :: Parser Text
-  complete <- o .:? "isComplete" .!= True
+  complete <- o .:? "isComplete" .!= False
   skew <- o .:? "microversionSkew" .!= False
   unless (complete && not skew) (fail "Read the complete feature tree at one microversion")
   nodes <- o .: "features"
@@ -72,7 +72,7 @@ compileEdit (Tree raw revision nodes) expected fid edits = parseEither (const co
   where
     compile = do
       unless (revision == expected) (fail "The Part Studio changed. Read its features again before editing.")
-      rollback <- raw .:? "rollbackIndex" .!= (-1 :: Int)
+      rollback <- raw .:? "rollbackIndex" .!= (0 :: Int)
       -- Requests use -1 for the end; responses can return the concrete history length.
       unless (rollback == -1 || rollback == length nodes) (fail "Move the rollback bar to the end before editing")
       when (null edits || length edits > 64) (fail "Supply between 1 and 64 expression edits")
