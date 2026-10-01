@@ -18,11 +18,11 @@ if (origin.origin !== serverUrl || (origin.protocol !== 'https:' && !['localhost
 const devUrl = process.env.ZITHER_DEV_URL;
 if (devUrl && devUrl !== 'http://127.0.0.1:5173') throw new Error('Invalid development URL.');
 protocol.registerSchemesAsPrivileged([{ scheme: 'zither', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
+if (process.env.ZITHER_SMOKE_DATA) app.setPath('userData', resolve(process.env.ZITHER_SMOKE_DATA));
 if (!app.requestSingleInstanceLock()) app.quit();
 else void start().catch(error => { dialog.showErrorBox('Zither could not start', messageOf(error)); app.quit(); });
 
 async function start() {
-  if (process.env.ZITHER_SMOKE_DATA) app.setPath('userData', resolve(process.env.ZITHER_SMOKE_DATA));
   await app.whenReady();
   const rendererRoot = resolve(here, '../renderer');
   protocol.handle('zither', request => {

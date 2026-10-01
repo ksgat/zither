@@ -30,8 +30,17 @@ main { min-width: 0; display: flex; flex-direction: column; height: 100vh; }
 header { display: flex; align-items: center; justify-content: space-between; padding: 25px 32px 20px; }
 h1 { font-size: 15px; margin: 0 0 6px; font-weight: 550; }
 header p { margin: 0; font-size: 12px; color: var(--muted); }
-.document-form { display: flex; gap: 8px; padding: 0 32px 18px; border-bottom: 1px solid var(--line); }
-.document-form input { min-width: 0; }
+.header-actions { display: flex; align-items: center; gap: 16px; }
+.file-picker { flex: 1; min-height: 0; overflow: auto; padding: 24px 32px; }
+.file-picker h2 { font-size: 26px; font-weight: 450; letter-spacing: -.035em; margin: 12px 0; }
+.file-picker p { font-size: 13px; line-height: 1.6; }
+.file-search { display: flex; gap: 8px; margin: 24px 0 16px; }
+.file-search input { min-width: 0; }
+.file-search select { width: 155px; flex-shrink: 0; }
+.file-list { margin-bottom: 20px; }
+.file-row { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 8px; text-align: left; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; overflow-wrap: anywhere; }
+.file-row span:last-child { font-size: 11px; }
+.link-entry { margin-top: 26px; }
 .features { padding: 6px 32px; border-bottom: 1px solid var(--line); }
 .feature-list { max-height: 180px; overflow: auto; }
 .feature-list summary { display: flex; gap: 10px; }
