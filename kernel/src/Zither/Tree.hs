@@ -73,7 +73,8 @@ compileEdit (Tree raw revision nodes) expected fid edits = parseEither (const co
     compile = do
       unless (revision == expected) (fail "The Part Studio changed. Read its features again before editing.")
       rollback <- raw .:? "rollbackIndex" .!= (-1 :: Int)
-      unless (rollback == -1) (fail "Move the rollback bar to the end before editing")
+      -- Requests use -1 for the end; responses can return the concrete history length.
+      unless (rollback == -1 || rollback == length nodes) (fail "Move the rollback bar to the end before editing")
       when (null edits || length edits > 64) (fail "Supply between 1 and 64 expression edits")
       unique "Duplicate edit to the same parameter" (map fst edits)
       node <- case filter ((== fid) . identifier) nodes of
@@ -86,7 +87,8 @@ compileEdit (Tree raw revision nodes) expected fid edits = parseEither (const co
             _ -> p
           feature = K.insert "parameters" (toJSON (map replace parameters)) (source node)
           metadata = K.filterWithKey (\key _ -> key `elem` ["sourceMicroversion", "serializationVersion", "libraryVersion"]) raw
-          body = K.insert "feature" (Object feature) (K.insert "rejectMicroversionSkew" (Bool True) metadata)
+          body = K.insert "btType" (String "BTFeatureDefinitionCall-1406") $
+            K.insert "feature" (Object feature) (K.insert "rejectMicroversionSkew" (Bool True) metadata)
       unless (any ((== "updatePartStudioFeature") . operationId) operations) (fail "Missing documented update operation")
       pure $ object ["version" .= (1 :: Int), "operationId" .= ("updatePartStudioFeature" :: Text),
         "featureId" .= fid, "body" .= body, "changes" .= changes, "changed" .= (feature /= source node)]

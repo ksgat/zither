@@ -40,7 +40,9 @@ cabal list-bin exe:zither-kernel
 
 Set server `ZITHER_KERNEL_PATH` to that absolute executable path. CAD reads and
 edits require it. Sign-in and the desktop shell can run without it. Keep the Cabal
-build/data directory available for the catalog command; `cabal install` installs
+build/data directory available for the catalog command. Use `cabal run exe:zither-kernel`
+for that command during development, or set `zither_kernel_datadir` to the absolute
+`kernel` source directory when launching the binary directly. `cabal install` installs
 the declared schema data file when distributing the executable. Packaging is still
 release work. No Haskell runtime or schema is passed to the renderer.
 

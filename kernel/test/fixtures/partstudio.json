@@ -3,7 +3,7 @@
   "serializationVersion": "1.2.4",
   "libraryVersion": 2500,
   "isComplete": true,
-  "rollbackIndex": -1,
+  "rollbackIndex": 3,
   "imports": [{"namespace": "maker", "microversion": "imported-version"}],
   "defaultFeatures": [{"featureId": "origin", "featureType": "origin"}],
   "featureStates": {"sketch1": {"featureStatus": "OK"}, "extrude1": {"featureStatus": "OK"}, "fillet1": {"featureStatus": "OK"}},

@@ -11,12 +11,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: haskell-actions/setup@v2
+        id: haskell
         with:
           ghc-version: '9.6.7'
           cabal-version: '3.12.1.0'
       - uses: actions/cache@v4
         with:
-          path: ~/.local/state/cabal/store
+          path: ${{ steps.haskell.outputs.cabal-store }}
           key: cabal-${{ runner.os }}-9.6.7-${{ hashFiles('kernel/*.cabal', 'kernel/cabal.project') }}
       - run: cabal build all && cabal test all
         working-directory: kernel
@@ -27,3 +28,5 @@ jobs:
       - run: npm ci
       - run: echo "ZITHER_KERNEL_PATH=$(cd kernel && cabal list-bin exe:zither-kernel)" >> "$GITHUB_ENV"
       - run: npm test
+        env:
+          zither_kernel_datadir: ${{ github.workspace }}/kernel

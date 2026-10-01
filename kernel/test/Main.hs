@@ -58,6 +58,8 @@ main = do
   assert "skewed trees rejected" (isLeft (importTree (set "microversionSkew" (Bool True) raw)))
   rolled <- right (importTree (set "rollbackIndex" (Number 1) raw))
   assert "rolled back edit rejected" (isLeft (compileEdit rolled "m1" "extrude1" [("depth", "20 mm")]))
+  end <- right (importTree (set "rollbackIndex" (Number (-1)) raw))
+  _ <- right (compileEdit end "m1" "extrude1" [("depth", "20 mm")])
   let features = items (field "features" raw)
   assert "duplicate IDs rejected" (isLeft (importTree (set "features" (toJSON (head features : features)) raw)))
   assert "catalog covers all operations" (length operations == 302 && any ((== "getAssemblyDefinition") . operationId) operations)

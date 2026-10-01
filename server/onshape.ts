@@ -47,7 +47,9 @@ export class OnshapeClient {
     try { return await response.json(); }
     catch { throw new AppError(body ? 'write_outcome_unknown' : 'invalid_response', 'Onshape returned an unreadable response. Inspect the workspace before continuing.', 502); }
   }
-  async read(target: OnshapeTarget, signal?: AbortSignal) { return featureListSchema.parse(await this.request(`${this.path(target)}/features`, undefined, signal)); }
+  async read(target: OnshapeTarget, signal?: AbortSignal) {
+    return featureListSchema.parse(await this.request(`${this.path(target)}/features?rollbackBarIndex=-1&includeGeometryIds=true&noSketchGeometry=false`, undefined, signal));
+  }
   async inspect(target: OnshapeTarget, signal?: AbortSignal) { return this.kernel.inspect(await this.read(target, signal), signal); }
   async edit(input: ParameterEdit, signal?: AbortSignal): Promise<EditResult> {
     const edit = editSchema.parse(input);
