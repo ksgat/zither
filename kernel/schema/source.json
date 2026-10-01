@@ -1,0 +1,8 @@
+{
+  "source": "https://cad.onshape.com/api/openapi",
+  "version": "1.221.89963-13d10d36cb23",
+  "apiBase": "https://cad.onshape.com/api/v17",
+  "sha256": "0b2694699d989c3f8a68c5be7742a52208801cb22e9440cecbfdf662f06e9353",
+  "operations": 302,
+  "schemas": 1249
+}

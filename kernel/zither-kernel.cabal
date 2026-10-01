@@ -1,0 +1,32 @@
+cabal-version: 3.0
+name: zither-kernel
+version: 0.1.0.0
+synopsis: Preserve Onshape feature trees and compile sparse edits
+build-type: Simple
+data-files: schema/onshape-openapi.json
+extra-source-files: schema/source.json, schema/README.md, schema/LICENSE, test/fixtures/partstudio.json
+
+common settings
+  default-language: Haskell2010
+  ghc-options: -Wall -Werror
+  build-depends: base >=4.18 && <5, aeson >=2.2 && <2.3, bytestring >=0.11 && <0.13, text >=2 && <2.2, containers >=0.6 && <0.8
+
+library
+  import: settings
+  hs-source-dirs: src
+  exposed-modules: Zither.Tree, Zither.Catalog, Zither.Operations
+
+executable zither-kernel
+  import: settings
+  hs-source-dirs: app
+  main-is: Main.hs
+  build-depends: zither-kernel
+  autogen-modules: Paths_zither_kernel
+  other-modules: Paths_zither_kernel
+
+test-suite interpretation
+  import: settings
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Main.hs
+  build-depends: zither-kernel

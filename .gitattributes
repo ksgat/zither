@@ -1,0 +1,2 @@
+# Keep the pinned upstream bytes stable for its provenance checksum.
+kernel/schema/onshape-openapi.json -text

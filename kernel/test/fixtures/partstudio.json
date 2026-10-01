@@ -1,0 +1,33 @@
+{
+  "sourceMicroversion": "m1",
+  "serializationVersion": "1.2.4",
+  "libraryVersion": 2500,
+  "isComplete": true,
+  "rollbackIndex": -1,
+  "imports": [{"namespace": "maker", "microversion": "imported-version"}],
+  "defaultFeatures": [{"featureId": "origin", "featureType": "origin"}],
+  "featureStates": {"sketch1": {"featureStatus": "OK"}, "extrude1": {"featureStatus": "OK"}, "fillet1": {"featureStatus": "OK"}},
+  "features": [
+    {
+      "featureId": "sketch1", "featureType": "newSketch", "name": "Base profile", "btType": "BTMSketch-151",
+      "parameters": [{"parameterId": "sketchPlane", "queries": [{"queryString": "opaque-plane-query", "geometryIds": ["plane1"]}]}],
+      "entities": [{"entityId": "line1", "geometry": {"btType": "BTCurveGeometryLine-117", "pntX": 0.0, "pntY": 0.0}}],
+      "constraints": [{"constraintType": "COINCIDENT", "parameters": [{"localFirst": "line1.start", "localSecond": "origin"}]}]
+    },
+    {
+      "featureId": "extrude1", "name": "Extrude 1", "featureType": "extrude", "btType": "BTMFeature-134",
+      "namespace": "", "nodeId": "original-node", "suppressed": false,
+      "parameters": [
+        {"parameterId": "depth", "expression": "10 mm", "btType": "BTMParameterQuantity-147", "nodeId": "depth-node", "units": "METER", "value": 0.01},
+        {"parameterId": "draftAngle", "expression": "2 deg", "btType": "BTMParameterQuantity-147"},
+        {"parameterId": "entities", "queries": [{"queryString": "opaque-region-query", "geometryIds": ["face1"], "deterministicIds": ["sketch1.region"]}]}
+      ],
+      "subFeatures": [{"featureId": "owned1", "name": "Owned feature", "featureType": "custom", "namespace": "maker", "parameters": [{"parameterId": "amount", "expression": "#thickness"}], "privateData": {"keep": [1, null, false]}}],
+      "futureField": {"keep": {"unicode": "Ø bracket", "largeInteger": 9007199254740991}}
+    },
+    {
+      "featureId": "fillet1", "name": "Edge fillets", "featureType": "fillet", "btType": "BTMFeature-134",
+      "parameters": [{"parameterId": "radius", "expression": "#radius"}, {"parameterId": "entities", "queries": [{"queryString": "opaque-edge-query", "geometryIds": ["edge1", "edge2"]}]}]
+    }
+  ]
+}
