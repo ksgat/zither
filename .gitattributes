@@ -1,0 +1,3 @@
+# Keep the pinned upstream bytes stable for its provenance checksum.
+kernel/schema/onshape-openapi.json -text linguist-generated=true
+kernel/src/Zither/Operations.hs linguist-generated=true

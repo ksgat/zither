@@ -3,9 +3,11 @@ import { config } from './config.js';
 import { createApp } from './app.js';
 import { desktopSessions } from './sessions.js';
 import { onshapeConnections } from './connections.js';
+import { haskellKernel, unavailableKernel } from './kernel.js';
 
 const connections = onshapeConnections(db, { origin: config.BETTER_AUTH_URL, clientId: config.ONSHAPE_CLIENT_ID,
-  clientSecret: config.ONSHAPE_CLIENT_SECRET, encryptionKey: config.TOKEN_ENCRYPTION_KEY, apiVersion: config.ONSHAPE_API_VERSION });
+  clientSecret: config.ONSHAPE_CLIENT_SECRET, encryptionKey: config.TOKEN_ENCRYPTION_KEY, apiVersion: config.ONSHAPE_API_VERSION }, fetch,
+  config.ZITHER_KERNEL_PATH ? haskellKernel(config.ZITHER_KERNEL_PATH) : unavailableKernel);
 const providers = [config.GOOGLE_CLIENT_ID && 'google', config.GITHUB_CLIENT_ID && 'github'].filter(Boolean) as string[];
 const server = createApp(auth, desktopSessions(db), connections, config.BETTER_AUTH_URL, providers).listen(config.PORT, () => {
   console.log(`Zither server listening on port ${config.PORT}`);

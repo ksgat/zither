@@ -117,7 +117,7 @@ Add integration coverage, packaging, a Windows installer, configuration document
 
 Prioritize modifications to human-made designs: reliable edge selection, many fillets, and assembly fastening. Add part properties, measurements, and topology context to support those operations. Extend the tool schema for each concrete operation. Creating new designs and drawing support come later.
 
-A small Haskell interpretation layer is the next experiment for units, feature meaning, and eventually edit planning. Onshape remains responsible for geometric evaluation and rebuilds. Evaluate tool choice and speed on actual editing tasks; do not treat “the right tool every time” as an achieved guarantee. Any future AdamCAD study should use observable behavior and material we are authorized to use.
+Haskell now imports the full feature tree, preserves source payloads, and compiles sparse expression edits against the observed revision. The complete public API catalog is pinned and indexed in Haskell. Onshape remains responsible for geometric evaluation and rebuilds. Extend this vocabulary with document-specific feature specifications and geometry observations; do not ask the model to reconstruct arbitrary API payloads. Evaluate tool choice, preservation, and speed on actual editing tasks; do not treat “the right tool every time” as an achieved guarantee. Any future AdamCAD study should use observable behavior and material we are authorized to use.
 
 For undo, first establish how to restore a specific operation without overwriting subsequent user changes. Do not advertise automatic rollback until that behavior has been implemented and tested.
 
@@ -143,4 +143,4 @@ No real credentials belong in Git. `.env.example` is a configuration template.
 
 The desktop, server routes, account handoff, Pi execution, model connections, and Onshape parameter adapter are implemented. Automated tests cover feature preservation, stale edits, uncertain writes, database sessions, agent tool execution, and local OAuth boundaries. A real Electron smoke test verifies the isolated renderer, IPC, controls, and encrypted local credentials.
 
-No live integrations have been tested. Packaging into an installer, release signing, production account recovery, broader CAD tools, and the planned Haskell layer remain separate work.
+The Haskell compiler handles exact feature preservation, revision checks, and expression edits, backed by a pinned public API catalog. No live integrations have been tested. Packaging into an installer, release signing, production account recovery, geometry selection, and broader CAD tools remain separate work.

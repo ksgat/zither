@@ -6,7 +6,7 @@ Zither runs in its own Electron window. Onshape stays in the user's browser. The
 
 ## Project status
 
-The first pipeline is implemented: Electron → local Pi agent → authenticated Zither server → Onshape. It can read a Part Studio and edit an existing expression parameter. OAuth and live CAD access still require your service configuration and end-to-end verification.
+The first pipeline is implemented: Electron → local Pi agent → authenticated Zither server → Haskell edit compiler → Onshape. It can read a Part Studio and edit an existing expression parameter. OAuth and live CAD access still require your service configuration and end-to-end verification.
 
 The UI is provisional. Its styling lives in [src/style.css](src/style.css), ready to replace with a Figma reference and your chosen fonts. Keep implementation small: native controls, direct functions, and no framework around a problem that does not need one.
 
@@ -19,6 +19,7 @@ The priority is editing human-made designs well. Fillet creation, topology selec
 - A Node server with Better Auth for Google, GitHub, and username/password sign-in.
 - Neon Postgres for accounts, sessions, and encrypted Onshape credentials.
 - Onshape OAuth and REST APIs for CAD access.
+- Haskell for lossless feature-tree import and sparse edit compilation, with the complete public API catalog pinned locally.
 - User-provided model API keys or ChatGPT sign-in for inference.
 
 ## Development prerequisites
@@ -50,6 +51,7 @@ npm start
 3. Use `http://localhost:3001` for both `BETTER_AUTH_URL` and `ZITHER_SERVER_URL` during local development. Production requires an HTTPS origin. The desktop reads `ZITHER_SERVER_URL` from `.env` in development; set it in the environment for `npm start`.
 4. Register Google and/or GitHub OAuth applications and set their client IDs and secrets. Register callbacks at `/api/auth/callback/google` and `/api/auth/callback/github` on the server origin. Username/password works without social provider credentials.
 5. Register an Onshape OAuth application with document read and write permissions. Set its client ID and secret and register `/onshape/callback` on the same server origin. The client secret stays on the server.
+6. Build the [Haskell kernel](kernel/README.md) and set server `ZITHER_KERNEL_PATH` to its absolute executable path. The imported schema and gateway use Onshape API v17. CAD reads and edits need the kernel; there is no JavaScript edit fallback.
 
 Then run:
 
@@ -78,6 +80,6 @@ npm test
 npm run test:desktop
 ```
 
-Tests use an in-process Postgres database, a deterministic Pi model, and mocked Onshape responses. The desktop smoke test launches a hidden real Electron window with an isolated profile under `.local`, checks the renderer/IPC boundary and OS-encrypted credentials, and writes `.local/desktop.png`. No provider secrets are needed and no live CAD is edited.
+Tests use an in-process Postgres database, a deterministic Pi model, and mocked Onshape responses. Set `ZITHER_KERNEL_PATH` when running `npm test` to exercise the actual Haskell compiler and CAD gateway; without it those cases are explicitly skipped. Linux CI builds Haskell and runs them. The desktop smoke test launches a hidden real Electron window with an isolated profile under `.local`, checks the renderer/IPC boundary and OS-encrypted credentials, and writes `.local/desktop.png`. No provider secrets are needed and no live CAD is edited.
 
 See [PLAN.md](PLAN.md) for the remaining milestones. Work is delivered in small stacked PRs, merged by you.

@@ -1,15 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import { parseOnshapeUrl, targetUrl } from '../shared/contracts.js';
-import { buildParameterUpdate, featureListSchema, OnshapeClient } from '../server/onshape.js';
+import { OnshapeClient } from '../server/onshape.js';
+import { haskellKernel } from '../server/kernel.js';
+import fixture from '../kernel/test/fixtures/partstudio.json';
 
-export const target = { documentId: 'a'.repeat(24), workspaceId: 'b'.repeat(24), elementId: 'c'.repeat(24) };
+const target = { documentId: 'a'.repeat(24), workspaceId: 'b'.repeat(24), elementId: 'c'.repeat(24) };
 const edit = { target, featureId: 'extrude1', parameterId: 'depth', expression: '25 mm', expectedMicroversion: 'm1' };
-const list = () => featureListSchema.parse({
-  sourceMicroversion: 'm1', serializationVersion: '1.2.4', libraryVersion: 0,
-  features: [{ featureId: 'extrude1', name: 'Extrude 1', featureType: 'extrude', btType: 'BTMFeature-134',
-    parameters: [{ parameterId: 'depth', expression: '10 mm', btType: 'BTMParameterQuantity-147', nodeId: 'keep' },
-      { parameterId: 'entities', queries: [{ geometryIds: ['edge1'] }] }], namespace: '', subFeatures: [] }],
-});
+const list = () => structuredClone(fixture);
+const rebuilt = () => {
+  const after = list(); after.sourceMicroversion = 'm2'; Object.assign(after.features[1].parameters[0], { expression: '25 mm' }); return after;
+};
+const reply = (status = 'OK') => Response.json({ featureState: { featureStatus: status }, sourceMicroversion: 'm2' });
+const executable = process.env.ZITHER_KERNEL_PATH;
+const client = (fetcher: typeof fetch) => new OnshapeClient('token', 'v17', fetcher, haskellKernel(executable!));
 
 describe('Onshape document links', () => {
   it('round trips an editable workspace URL', () => expect(parseOnshapeUrl(targetUrl(target))).toEqual(target));
@@ -19,44 +22,74 @@ describe('Onshape document links', () => {
   ])('rejects unsupported target %s', url => expect(() => parseOnshapeUrl(url)).toThrow());
 });
 
-describe('feature edits', () => {
-  it('changes only the requested expression and retains unknown CAD fields', () => {
-    const original = list();
-    const result = buildParameterUpdate(original, edit);
-    expect(result.rejectMicroversionSkew).toBe(true);
-    expect(result.sourceMicroversion).toBe('m1');
-    const expected = structuredClone(original.features[0]);
-    expected.parameters[0].expression = '25 mm';
-    expect(result.feature).toEqual(expected);
-    expect(original.features[0].parameters[0].expression).toBe('10 mm');
-  });
-  it('rejects stale observations and non-expression parameters', () => {
-    expect(() => buildParameterUpdate(list(), { ...edit, expectedMicroversion: 'old' })).toThrow('changed');
-    expect(() => buildParameterUpdate(list(), { ...edit, parameterId: 'entities' })).toThrow('expression');
+// Linux CI supplies the compiled binary: these exercise the real edit compiler,
+// not a TypeScript reimplementation. Onshape alone is mocked.
+describe.runIf(!!executable)('Haskell → Onshape edits', () => {
+  it('POSTs the preserved feature and verifies the new expression and revision', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(list()))
+      .mockResolvedValueOnce(reply()).mockResolvedValueOnce(Response.json(rebuilt()));
+    const result = await client(fetcher).edit(edit);
+    expect(result.featureStatus).toBe('OK');
+    const body = JSON.parse(fetcher.mock.calls[1][1]!.body as string);
+    expect(body.feature).toEqual(rebuilt().features[1]);
+    expect(body.rejectMicroversionSkew).toBe(true);
+    expect(body.sourceMicroversion).toBe('m1');
   });
   it('does not POST after a concurrent browser edit', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ...list(), sourceMicroversion: 'm2' }));
-    await expect(new OnshapeClient('token', 'v9', fetcher).edit(edit)).rejects.toThrow('changed');
+    await expect(client(fetcher).edit(edit)).rejects.toThrow('changed');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it('does not rebuild a no-op', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json(list()));
+    expect(await client(fetcher).edit({ ...edit, expression: '10 mm' })).toMatchObject({ featureStatus: 'UNCHANGED' });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
   it('reports an invalid rebuild despite HTTP 200', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(list()))
-      .mockResolvedValueOnce(Response.json({ featureState: { featureStatus: 'ERROR' } }))
-      .mockResolvedValueOnce(Response.json({ ...list(), sourceMicroversion: 'm2' }));
-    const result = await new OnshapeClient('token', 'v9', fetcher).edit(edit);
-    expect(result.featureStatus).toBe('ERROR');
-    expect(result.before).toBe('10 mm');
-    expect(result.after).toBe('25 mm');
+      .mockResolvedValueOnce(reply('ERROR')).mockResolvedValueOnce(Response.json(rebuilt()));
+    expect(await client(fetcher).edit(edit)).toMatchObject({ featureStatus: 'ERROR', before: '10 mm', after: '25 mm' });
+  });
+  it('stops when the edited feature breaks a downstream feature', async () => {
+    const after = rebuilt(); after.featureStates.fillet1.featureStatus = 'ERROR';
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(list()))
+      .mockResolvedValueOnce(reply()).mockResolvedValueOnce(Response.json(after));
+    expect(await client(fetcher).edit(edit)).toMatchObject({ featureStatus: 'DOWNSTREAM_ERROR' });
+  });
+  it('does not call a mismatched read-back verified', async () => {
+    const after = rebuilt(); Object.assign(after.features[1].parameters[0], { expression: '50 mm' });
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(list()))
+      .mockResolvedValueOnce(reply()).mockResolvedValueOnce(Response.json(after));
+    expect(await client(fetcher).edit(edit)).toMatchObject({ featureStatus: 'UNVERIFIED' });
+  });
+  it('requires complete feature states to verify a rebuild', async () => {
+    const after = { ...rebuilt(), featureStates: {} };
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(list()))
+      .mockResolvedValueOnce(reply()).mockResolvedValueOnce(Response.json(after));
+    expect(await client(fetcher).edit(edit)).toMatchObject({ featureStatus: 'UNVERIFIED' });
+  });
+  it('does not blame an unchanged pre-existing downstream failure on this edit', async () => {
+    const before = list(), after = rebuilt();
+    before.featureStates.fillet1.featureStatus = 'ERROR'; after.featureStates.fillet1.featureStatus = 'ERROR';
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(before))
+      .mockResolvedValueOnce(reply()).mockResolvedValueOnce(Response.json(after));
+    expect(await client(fetcher).edit(edit)).toMatchObject({ featureStatus: 'OK' });
+  });
+  it('does not verify against a later browser microversion', async () => {
+    const after = rebuilt(); after.sourceMicroversion = 'm3';
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(list()))
+      .mockResolvedValueOnce(reply()).mockResolvedValueOnce(Response.json(after));
+    expect(await client(fetcher).edit(edit)).toMatchObject({ featureStatus: 'UNVERIFIED' });
   });
   it('does not retry a write whose response is lost', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(list())).mockRejectedValueOnce(new Error('timeout'));
-    await expect(new OnshapeClient('token', 'v9', fetcher).edit(edit)).rejects.toMatchObject({ code: 'write_outcome_unknown' });
+    await expect(client(fetcher).edit(edit)).rejects.toMatchObject({ code: 'write_outcome_unknown' });
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
-  it('preserves an acknowledged write when the subsequent read fails', async () => {
+  it('keeps an acknowledged write unverified when its subsequent read fails', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(list()))
-      .mockResolvedValueOnce(Response.json({ featureState: { featureStatus: 'OK' } }))
-      .mockRejectedValueOnce(new Error('offline'));
-    expect(await new OnshapeClient('token', 'v9', fetcher).edit(edit)).toMatchObject({ featureStatus: 'OK', snapshot: null });
+      .mockResolvedValueOnce(reply()).mockRejectedValueOnce(new Error('offline'));
+    expect(await client(fetcher).edit(edit)).toMatchObject({ featureStatus: 'UNVERIFIED', snapshot: null });
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
 });
