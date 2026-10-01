@@ -58,7 +58,6 @@ export type ChatEvent =
   | { type: 'activity'; id: string; name: string; status: 'running' | 'done' | 'error'; detail?: string }
   | { type: 'error'; message: string }
   | { type: 'snapshot'; snapshot: FeatureSnapshot }
-  | { type: 'auth'; id: string; message: string }
   | { type: 'done' };
 export interface DesktopBridge {
   state(): Promise<PublicState>;
@@ -73,7 +72,6 @@ export interface DesktopBridge {
   setModel(model: ModelOption): Promise<void>;
   saveKey(provider: string, key: string): Promise<void>;
   loginChatGPT(): Promise<void>;
-  answerAuth(id: string, value: string): Promise<void>;
   removeProvider(provider: string): Promise<void>;
   prompt(text: string): Promise<void>;
   stop(): Promise<void>;

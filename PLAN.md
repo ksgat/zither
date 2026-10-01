@@ -2,7 +2,7 @@
 
 Zither will be a separate Electron assistant for Onshape. Users keep designing in their browser and talk to Zither in a desktop window. Pi runs the agent locally, and CAD tools call Onshape's HTTP API.
 
-**Status:** Draft for review. This document proposes the implementation sequence. The repository contains an incomplete scaffold; development resumes after your review.
+**Status:** Approved direction; the first pipeline is implemented in reviewable PRs. Live OAuth, inference, and CAD validation require configured accounts. This document records the longer-term milestones, not a claim that all acceptance checks have passed.
 
 ## Product experience
 
@@ -115,7 +115,9 @@ Add integration coverage, packaging, a Windows installer, configuration document
 
 ## After the first edit workflow
 
-Add part properties and measurements, then narrowly defined modeling operations such as creating a sketch and extrusion. Extend the tool schema and validation for each operation instead of immediately exposing arbitrary generated FeatureScript. Assemblies, drawing support, richer geometry context, and optional browser integration come later.
+Prioritize modifications to human-made designs: reliable edge selection, many fillets, and assembly fastening. Add part properties, measurements, and topology context to support those operations. Extend the tool schema for each concrete operation. Creating new designs and drawing support come later.
+
+A small Haskell interpretation layer is the next experiment for units, feature meaning, and eventually edit planning. Onshape remains responsible for geometric evaluation and rebuilds. Evaluate tool choice and speed on actual editing tasks; do not treat “the right tool every time” as an achieved guarantee. Any future AdamCAD study should use observable behavior and material we are authorized to use.
 
 For undo, first establish how to restore a specific operation without overwriting subsequent user changes. Do not advertise automatic rollback until that behavior has been implemented and tested.
 
@@ -139,6 +141,6 @@ No real credentials belong in Git. `.env.example` is a configuration template.
 
 ## Current checkpoint
 
-The scaffold includes dependency configuration, shared contracts, draft Better Auth configuration, draft database schema, encryption helpers, and an initial Onshape feature adapter. These are starting points to review during implementation, not completed milestones.
+The desktop, server routes, account handoff, Pi execution, model connections, and Onshape parameter adapter are implemented. Automated tests cover feature preservation, stale edits, uncertain writes, database sessions, agent tool execution, and local OAuth boundaries. A real Electron smoke test verifies the isolated renderer, IPC, controls, and encrypted local credentials.
 
-Electron, the UI, server endpoints, Pi execution, OAuth handoff, and automated tests are still missing. Dependencies installed successfully, but Pi requires Node 22.19 or newer while this machine currently has Node 22.16. The initial install also reported two moderate dependency vulnerabilities; investigate them during the desktop foundation work. No live integrations have been tested.
+No live integrations have been tested. Packaging into an installer, release signing, production account recovery, broader CAD tools, and the planned Haskell layer remain separate work.
