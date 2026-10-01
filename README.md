@@ -8,6 +8,8 @@ Zither runs in its own Electron window. Onshape stays in the user's browser. The
 
 The first pipeline is implemented: Electron → local Pi agent → authenticated Zither server → Haskell edit compiler → Onshape. It can read a Part Studio and edit an existing expression parameter. OAuth and live CAD access still require your service configuration and end-to-end verification.
 
+Live Neon setup has been verified through account registration, password sign-in, the desktop session handoff, replay rejection, and sign-out. The temporary test account was removed. Connection strings and app secrets remain local in the ignored `.env`.
+
 The UI is provisional. Its styling lives in [src/style.css](src/style.css), ready to replace with a Figma reference and your chosen fonts. Keep implementation small: native controls, direct functions, and no framework around a problem that does not need one.
 
 The priority is editing human-made designs well. Fillet creation, topology selection, and assembly fastening are future tools; the current agent explicitly reports that it cannot perform them yet.
