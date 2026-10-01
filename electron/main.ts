@@ -7,9 +7,8 @@ import { AppError, messageOf } from '../shared/errors.js';
 import { Store } from './store.js';
 import { serverApi } from './api.js';
 import { loopback, randomToken, challenge } from './loopback.js';
-import { loginChatGPT } from './chatgpt.js';
 import { codexLogin } from './codex.js';
-import { apiKeyProviderSchema, modelConnections, providerSchema } from './models.js';
+import { apiKeyProviderSchema, migrateModelCredentials, modelConnections, providerSchema } from './models.js';
 import { cadAgent } from './agent.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -35,8 +34,9 @@ async function start() {
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
   const store = new Store(join(app.getPath('userData'), 'credentials.bin'));
+  await migrateModelCredentials(store);
   const api = serverApi(serverUrl, () => store.get<string>('session'));
-  const providers = modelConnections(store, message => emit({ type: 'error', message }));
+  const providers = modelConnections(store);
   let target: OnshapeTarget | null = null;
   let selection = store.get<ModelOption>('model') ?? null;
   let agent: ReturnType<typeof cadAgent> | undefined;
@@ -118,16 +118,6 @@ async function start() {
       apiKeyProviderSchema.parse(provider); z.string().trim().min(1).max(4096).parse(key);
       await store.credentials.modify(provider, async () => ({ type: 'api_key', key: key.trim() }));
       agent = undefined;
-    },
-    async loginChatGPT() {
-      await browserAuth(async signal => {
-        const deviceId = store.get<string>('deviceId') ?? crypto.randomUUID();
-        store.set('deviceId', deviceId);
-        const previous = await store.credentials.read('openai');
-        const credential = await loginChatGPT(deviceId, url => shell.openExternal(url), signal, previous?.type === 'oauth' ? previous : undefined);
-        await store.credentials.modify('openai', async () => credential);
-        agent = undefined;
-      });
     },
     async loginCodex() {
       await browserAuth(signal => codex.run(providers.models, signal));

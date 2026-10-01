@@ -91,8 +91,7 @@ function App() {
           <option value="">Choose a model</option>
           {models.map(model => <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>{model.name} · {model.provider}</option>)}
         </select>
-        <button disabled={busy} onClick={() => perform('Waiting for ChatGPT sign-in', async () => { await api.loginChatGPT(); await updateModels(); setEntries([]); })}>Continue with ChatGPT ↗</button>
-        <button disabled={busy} onClick={() => perform('Waiting for Codex sign-in', async () => { await api.loginCodex(); await updateModels(); setEntries([]); })}>Codex subscription (legacy) ↗</button>
+        <button disabled={busy} onClick={() => perform('Waiting for Codex sign-in', async () => { await api.loginCodex(); await updateModels(); setEntries([]); })}>Sign in to Codex ↗</button>
         {authPrompt && <details key={authPrompt}><summary>Browser didn’t return?</summary><form onSubmit={event => {
           event.preventDefault(); const form = event.currentTarget;
           const value = String(new FormData(form).get('callback'));

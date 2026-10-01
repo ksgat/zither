@@ -15,6 +15,8 @@ try {
   await window.getByRole('heading', { name: 'Workspace', exact: true }).waitFor();
   assert.equal(await window.evaluate(() => typeof window.require), 'undefined');
   assert.equal(await window.evaluate(() => typeof window.zither), 'object');
+  assert.equal(await window.evaluate(() => typeof window.zither.loginChatGPT), 'undefined');
+  assert.equal(await window.getByRole('button', { name: /ChatGPT/ }).count(), 0);
   const state = await window.evaluate(() => window.zither.state());
   assert.equal(state.user, null);
   assert.equal(state.target, null);
@@ -38,12 +40,12 @@ try {
       return Response.json({ access_token: token, refresh_token: 'smoke-refresh-token', expires_in: 3600 });
     };
   });
-  const legacy = window.getByRole('button', { name: 'Codex subscription (legacy)' });
-  await legacy.click();
+  const signIn = window.getByRole('button', { name: 'Sign in to Codex' });
+  await signIn.click();
   await window.getByText('Browser didn’t return?').waitFor();
   await window.getByRole('button', { name: 'Stop', exact: true }).click();
   await window.getByText('Browser didn’t return?').waitFor({ state: 'detached' });
-  await legacy.click();
+  await signIn.click();
   await window.getByText('Browser didn’t return?').click();
   const callback = await app.evaluate(() => {
     const auth = new URL(globalThis.codexTest.url);

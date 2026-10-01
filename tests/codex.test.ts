@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { InMemoryCredentialStore } from '@earendil-works/pi-ai';
 import { afterEach, expect, it, vi } from 'vitest';
 import { codexLogin } from '../electron/codex.js';
-import { apiKeyProviderSchema, modelConnections } from '../electron/models.js';
+import { apiKeyProviderSchema, migrateModelCredentials, modelConnections } from '../electron/models.js';
 
 const localFetch = globalThis.fetch;
 const token = `test.${Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: 'test-account' } })).toString('base64url')}.test`;
@@ -12,15 +12,14 @@ afterEach(() => vi.unstubAllGlobals());
 
 function setup() {
   const credentials = new InMemoryCredentialStore();
-  const reportError = vi.fn();
-  const providers = modelConnections({ credentials }, reportError);
+  const providers = modelConnections({ credentials });
   const open = vi.fn(async (_url: string) => {});
   const show = vi.fn((_id: string | null) => {});
   const login = codexLogin(open, show);
   const controller = new AbortController();
   const exchange = vi.fn(async () => Response.json({ access_token: token, refresh_token: 'test-refresh', expires_in: 3600 }));
   vi.stubGlobal('fetch', exchange);
-  return { credentials, providers, reportError, open, show, login, controller, exchange };
+  return { credentials, providers, open, show, login, controller, exchange };
 }
 async function begin(s: ReturnType<typeof setup>) {
   const result = s.login.run(s.providers.models, AbortSignal.any([s.controller.signal, AbortSignal.timeout(5000)]));
@@ -104,7 +103,7 @@ it('reports browser launch failures and hides token response bodies', async () =
   await expect(result).rejects.toThrow(/^Codex sign-in failed\. Please try again\.$/);
 });
 
-it('refreshes legacy credentials with Pi and keeps Codex models available if the newer connection fails', async () => {
+it('refreshes Codex credentials with Pi and never authenticates OpenAI with retired OAuth credentials', async () => {
   const s = setup();
   await s.credentials.modify('openai-codex', async () => ({ ...credential, expires: 0 }));
   await s.providers.models.getAuth('openai-codex');
@@ -112,9 +111,31 @@ it('refreshes legacy credentials with Pi and keeps Codex models available if the
   expect(new URLSearchParams(options.body as URLSearchParams).get('grant_type')).toBe('refresh_token');
   expect((await s.credentials.read('openai-codex'))?.type).toBe('oauth');
   await s.credentials.modify('openai', async () => credential);
-  s.exchange.mockResolvedValueOnce(new Response('unavailable', { status: 503 }));
+  s.exchange.mockClear();
   const catalog = await s.providers.list();
   expect(catalog.some(m => m.provider === 'openai-codex')).toBe(true);
   expect(catalog.some(m => m.provider === 'openai')).toBe(false);
-  expect(s.reportError).toHaveBeenCalledOnce();
+  expect(await s.providers.models.getAuth('openai')).toBeUndefined();
+  expect(s.exchange).not.toHaveBeenCalled();
+});
+
+it.each(['openai', 'openai-codex'])('removes retired credentials and preserves the %s selection when valid', async provider => {
+  const s = setup();
+  const selection = { provider, id: 'model', name: 'Model' };
+  const values = new Map<string, unknown>([['model', selection], ['deviceId', 'retired-device']]);
+  const store = { credentials: s.credentials, get: <T>(key: string) => values.get(key) as T | undefined,
+    set: (key: string, value: unknown) => { values.set(key, value); } };
+  await s.credentials.modify('openai', async () => credential);
+  await s.credentials.modify('openai-codex', async () => credential);
+  await migrateModelCredentials(store);
+  expect(await s.credentials.read('openai')).toBeUndefined();
+  expect(await s.credentials.read('openai-codex')).toEqual(credential);
+  expect(values.get('deviceId')).toBeUndefined();
+  expect(values.get('model')).toEqual(provider === 'openai' ? null : selection);
+  await s.credentials.modify('openai', async () => ({ type: 'api_key', key: 'existing-api-key' }));
+  values.set('model', selection);
+  await migrateModelCredentials(store);
+  expect(await s.credentials.read('openai')).toEqual({ type: 'api_key', key: 'existing-api-key' });
+  expect(values.get('model')).toEqual(selection);
+  expect(s.exchange).not.toHaveBeenCalled();
 });

@@ -72,7 +72,6 @@ export interface DesktopBridge {
   models(): Promise<ModelOption[]>;
   setModel(model: ModelOption): Promise<void>;
   saveKey(provider: string, key: string): Promise<void>;
-  loginChatGPT(): Promise<void>;
   loginCodex(): Promise<void>;
   submitCodexCallback(id: string, value: string): Promise<void>;
   removeProvider(provider: string): Promise<void>;

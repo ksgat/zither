@@ -11,7 +11,7 @@ const bridge: DesktopBridge = {
   connectOnshape: () => call('connectOnshape'), disconnectOnshape: () => call('disconnectOnshape'),
   setTarget: url => call('setTarget', url), inspect: () => call('inspect'), openOnshape: () => call('openOnshape'),
   models: () => call('models'), setModel: model => call('setModel', model), saveKey: (provider, key) => call('saveKey', provider, key),
-  loginChatGPT: () => call('loginChatGPT'), removeProvider: provider => call('removeProvider', provider),
+  removeProvider: provider => call('removeProvider', provider),
   loginCodex: () => call('loginCodex'), submitCodexCallback: (id, value) => call('submitCodexCallback', id, value),
   prompt: text => call('prompt', text), stop: () => call('stop'), newChat: () => call('newChat'),
   onEvent: callback => {
