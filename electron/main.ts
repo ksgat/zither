@@ -8,7 +8,8 @@ import { Store } from './store.js';
 import { serverApi } from './api.js';
 import { loopback, randomToken, challenge } from './loopback.js';
 import { loginChatGPT } from './chatgpt.js';
-import { modelConnections, providerSchema } from './models.js';
+import { codexLogin } from './codex.js';
+import { apiKeyProviderSchema, modelConnections, providerSchema } from './models.js';
 import { cadAgent } from './agent.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -35,7 +36,7 @@ async function start() {
   session.defaultSession.setPermissionCheckHandler(() => false);
   const store = new Store(join(app.getPath('userData'), 'credentials.bin'));
   const api = serverApi(serverUrl, () => store.get<string>('session'));
-  const providers = modelConnections(store);
+  const providers = modelConnections(store, message => emit({ type: 'error', message }));
   let target: OnshapeTarget | null = null;
   let selection = store.get<ModelOption>('model') ?? null;
   let agent: ReturnType<typeof cadAgent> | undefined;
@@ -53,6 +54,7 @@ async function start() {
   app.on('second-instance', () => { if (window.isMinimized()) window.restore(); window.focus(); });
   window.on('closed', () => { authController?.abort(); agent?.stop(); app.quit(); });
   const emit = (event: ChatEvent) => { if (!window.isDestroyed()) window.webContents.send('zither:event', event); };
+  const codex = codexLogin(url => shell.openExternal(url), id => emit({ type: 'auth_prompt', id }));
 
   async function browserAuth(action: (signal: AbortSignal) => Promise<void>) {
     authController = new AbortController();
@@ -113,7 +115,7 @@ async function start() {
       store.set('model', selection); agent = undefined;
     },
     async saveKey(provider: string, key: string) {
-      providerSchema.parse(provider); z.string().trim().min(1).max(4096).parse(key);
+      apiKeyProviderSchema.parse(provider); z.string().trim().min(1).max(4096).parse(key);
       await store.credentials.modify(provider, async () => ({ type: 'api_key', key: key.trim() }));
       agent = undefined;
     },
@@ -127,6 +129,11 @@ async function start() {
         agent = undefined;
       });
     },
+    async loginCodex() {
+      await browserAuth(signal => codex.run(providers.models, signal));
+      agent = undefined;
+    },
+    submitCodexCallback(id: string, value: string) { codex.reply(id, value); },
     async removeProvider(provider: string) {
       providerSchema.parse(provider); await store.credentials.delete(provider);
       if (selection?.provider === provider) { selection = null; store.set('model', null); }
@@ -154,7 +161,7 @@ async function start() {
     const senderUrl = event.senderFrame.url;
     if (devUrl ? new URL(senderUrl).origin !== devUrl : senderUrl !== 'zither://app/index.html') return { error: 'Invalid sender origin.' };
     if (typeof method !== 'string' || !Object.hasOwn(methods, method) || !Array.isArray(args)) return { error: 'Unknown operation.' };
-    const mutates = !['state', 'stop', 'openOnshape'].includes(method);
+    const mutates = !['state', 'stop', 'openOnshape', 'submitCodexCallback'].includes(method);
     if (mutates && (busy || changing)) return { error: 'Finish or stop the current operation first.' };
     if (mutates) changing = true;
     try { return { value: await methods[method](...args as never[]) }; }

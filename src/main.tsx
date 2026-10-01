@@ -17,6 +17,7 @@ function App() {
   const [running, setRunning] = useState(false);
   const [url, setUrl] = useState('');
   const [prompt, setPrompt] = useState('');
+  const [authPrompt, setAuthPrompt] = useState<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const busy = !!working || running;
 
@@ -39,6 +40,7 @@ function App() {
     return api.onEvent((event: ChatEvent) => {
       if (event.type === 'snapshot') setSnapshot(event.snapshot);
       if (event.type === 'error') setError(event.message);
+      if (event.type === 'auth_prompt') setAuthPrompt(event.id);
       if (event.type === 'done') setRunning(false);
       if (event.type === 'text') setEntries(items => items.some(item => item.id === event.id)
         ? items.map(item => item.id === event.id ? { ...item, text: item.text + event.delta } : item)
@@ -90,6 +92,16 @@ function App() {
           {models.map(model => <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>{model.name} · {model.provider}</option>)}
         </select>
         <button disabled={busy} onClick={() => perform('Waiting for ChatGPT sign-in', async () => { await api.loginChatGPT(); await updateModels(); setEntries([]); })}>Continue with ChatGPT ↗</button>
+        <button disabled={busy} onClick={() => perform('Waiting for Codex sign-in', async () => { await api.loginCodex(); await updateModels(); setEntries([]); })}>Codex subscription (legacy) ↗</button>
+        {authPrompt && <details key={authPrompt}><summary>Browser didn’t return?</summary><form onSubmit={event => {
+          event.preventDefault(); const form = event.currentTarget;
+          const value = String(new FormData(form).get('callback'));
+          void api.submitCodexCallback(authPrompt, value).then(() => form.reset()).catch(error => setError(error.message));
+        }}>
+          <p className="hint">Finish sign-in, then paste the full localhost link from your browser’s address bar.</p>
+          <label>Callback link<input name="callback" type="password" autoComplete="off" maxLength={8192} required /></label>
+          <button>Finish sign-in</button>
+        </form></details>}
         <details><summary>Add an API key</summary><form onSubmit={event => {
           event.preventDefault(); const form = event.currentTarget; const data = new FormData(form);
           void perform('Saving API key', async () => { await api.saveKey(String(data.get('provider')), String(data.get('key'))); form.reset(); await updateModels(); setEntries([]); });

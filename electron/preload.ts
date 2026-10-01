@@ -12,6 +12,7 @@ const bridge: DesktopBridge = {
   setTarget: url => call('setTarget', url), inspect: () => call('inspect'), openOnshape: () => call('openOnshape'),
   models: () => call('models'), setModel: model => call('setModel', model), saveKey: (provider, key) => call('saveKey', provider, key),
   loginChatGPT: () => call('loginChatGPT'), removeProvider: provider => call('removeProvider', provider),
+  loginCodex: () => call('loginCodex'), submitCodexCallback: (id, value) => call('submitCodexCallback', id, value),
   prompt: text => call('prompt', text), stop: () => call('stop'), newChat: () => call('newChat'),
   onEvent: callback => {
     const listener = (_event: Electron.IpcRendererEvent, event: ChatEvent) => callback(event);

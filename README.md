@@ -66,6 +66,8 @@ The server has no proxy-trust configuration by default. Configure trusted proxy 
 
 Sign in to Zither in the system browser, connect Onshape, and select **Refresh connections** after returning from Onshape consent. Add a model API key or choose **Continue with ChatGPT**, then select a model. An OpenAI API key and ChatGPT use the same provider slot; connecting one replaces the other.
 
+**Codex subscription (legacy)** tries Pi’s older Codex browser login. It has its own `openai-codex` connection and uses Pi’s Codex transport and model catalog. Complete sign-in in your browser, then choose an `openai-codex` model. If the browser cannot return (for example, port 1455 is occupied), expand **Browser didn’t return?** and paste the full localhost callback link. **Stop** cancels sign-in. Tokens stay in the local OS-encrypted store. This path still needs verification with a real subscription.
+
 Paste the URL of an editable Part Studio in its default configuration. Try “Explain this feature tree,” then an explicit dimension edit such as “Change Extrude 1 depth to 25 mm.” The agent re-reads the feature data for each user request and preserves the rest of the edited feature. A changed microversion rejects the write. Failed or uncertain writes stop further edits for that request.
 
 Changing documents, model connections, or Zither accounts starts a fresh conversation. Chat history is currently in memory. Stopping cancels local work; a write already accepted by Onshape cannot be undone by cancellation. Disconnecting Onshape removes Zither's stored tokens; revoke the application's grant in Onshape to revoke it at the provider too.
