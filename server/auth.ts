@@ -3,7 +3,8 @@ import { username } from 'better-auth/plugins';
 import pg from 'pg';
 import { config } from './config.js';
 
-export const db = new pg.Pool({ connectionString: config.DATABASE_URL, max: 8 });
+export const db = new pg.Pool({ connectionString: config.DATABASE_URL, max: 8, connectionTimeoutMillis: 10_000, idleTimeoutMillis: 30_000 });
+db.on('error', () => console.error('Database connection lost. Check Neon availability and DATABASE_URL.'));
 export const auth = betterAuth({
   appName: 'Zither',
   baseURL: config.BETTER_AUTH_URL,

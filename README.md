@@ -8,6 +8,8 @@ Zither runs in its own Electron window. Onshape stays in the user's browser. The
 
 The first pipeline is implemented: Electron → local Pi agent → authenticated Zither server → Haskell edit compiler → Onshape. It can read a Part Studio and edit an existing expression parameter. OAuth and live CAD access still require your service configuration and end-to-end verification.
 
+Live Neon setup has been verified through account registration, password sign-in, the desktop session handoff, replay rejection, and sign-out. The temporary test account was removed. Connection strings and app secrets remain local in the ignored `.env`.
+
 The UI is provisional. Its styling lives in [src/style.css](src/style.css), ready to replace with a Figma reference and your chosen fonts. Keep implementation small: native controls, direct functions, and no framework around a problem that does not need one.
 
 The priority is editing human-made designs well. Fillet creation, topology selection, and assembly fastening are future tools; the current agent explicitly reports that it cannot perform them yet.
@@ -46,19 +48,25 @@ npm start
 
 ## Configure the server
 
-1. Copy `.env.example` to `.env`. Set `DATABASE_URL` to your Neon connection string.
-2. Set a random `BETTER_AUTH_SECRET` and a base64-encoded 32-byte `TOKEN_ENCRYPTION_KEY`. The example file includes a generation command.
+1. Run `npm run setup`. This creates an ignored `.env` and generates `BETTER_AUTH_SECRET` and `TOKEN_ENCRYPTION_KEY`. Running it again preserves the existing file and secrets.
+2. Create a Neon project/database for Zither, open **Connect**, and paste the Postgres connection string into `DATABASE_URL`, keeping its SSL parameters. Use the direct connection string for `DATABASE_MIGRATION_URL` if `DATABASE_URL` is pooled. Keep both app secrets stable; changing the encryption key makes existing Onshape credentials unreadable. [Neon connection documentation](https://neon.com/docs/connect/connection-pooling)
 3. Use `http://localhost:3001` for both `BETTER_AUTH_URL` and `ZITHER_SERVER_URL` during local development. Production requires an HTTPS origin. The desktop reads `ZITHER_SERVER_URL` from `.env` in development; set it in the environment for `npm start`.
-4. Register Google and/or GitHub OAuth applications and set their client IDs and secrets. Register callbacks at `/api/auth/callback/google` and `/api/auth/callback/github` on the server origin. Username/password works without social provider credentials.
+4. Register Google and/or GitHub OAuth applications and set both their client ID and secret. Local callback URLs are `http://localhost:3001/api/auth/callback/google` and `http://localhost:3001/api/auth/callback/github`. Leave each pair blank until configured; username/password works without social credentials.
 5. Register an Onshape OAuth application with document read and write permissions. Set its client ID and secret and register `/onshape/callback` on the same server origin. The client secret stays on the server.
 6. Build the [Haskell kernel](kernel/README.md) and set server `ZITHER_KERNEL_PATH` to its absolute executable path. The imported schema and gateway use Onshape API v17. CAD reads and edits need the kernel; there is no JavaScript edit fallback.
 
 Then run:
 
 ```sh
+npm run db:check
 npm run db:migrate
+npm run db:check
 npm run dev:server
 ```
+
+`db:check` is read-only and reports pending schema with exit code 1. A fresh database needs the migration before that check passes. `db:migrate` uses Better Auth's migration API for account, session, provider, verification, username, and rate-limit storage, then creates Zither's desktop and Onshape tables. It can be rerun without clearing accounts. Neither command prints connection strings or secret values.
+
+Once the server is running, `http://localhost:3001/health` checks the HTTP process and `http://localhost:3001/login` opens account registration. Use **Sign in to Zither** in Electron to complete the desktop handoff. Database setup and username/password sign-in can be tested before adding OAuth provider credentials or the Haskell executable.
 
 The server has no proxy-trust configuration by default. Configure trusted proxy hops and shared rate limiting for the actual hosting topology before exposing it publicly. Email verification/recovery and production deployment configuration are also still release work; this is a development pipeline.
 
