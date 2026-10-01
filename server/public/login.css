@@ -1,0 +1,12 @@
+:root { font-family: system-ui, sans-serif; color: #242421; background: #f6f5f1; }
+body { margin: 0; padding: 12vh 24px; }
+main { max-width: 360px; margin: auto; }
+.wordmark { font-weight: 650; letter-spacing: -.05em; font-size: 28px; margin-bottom: 48px; }
+h1 { font-size: 27px; font-weight: 500; letter-spacing: -.04em; }
+p { color: #6b6a63; line-height: 1.5; }
+label { display: block; font-size: 13px; margin: 18px 0; }
+input { box-sizing: border-box; display: block; width: 100%; padding: 11px; margin-top: 7px; border: 1px solid #d5d4ce; border-radius: 5px; font: inherit; background: white; }
+button { width: 100%; border: 0; border-radius: 5px; padding: 12px; font: inherit; font-size: 14px; background: #30382f; color: white; cursor: pointer; margin: 5px 0; }
+button.secondary { color: #45483f; background: transparent; }
+button:disabled { opacity: .5; cursor: wait; }
+[hidden] { display: none !important; }

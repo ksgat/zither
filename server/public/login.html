@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in to Zither</title><link rel="stylesheet" href="/assets/login.css"></head>
+<body><main>
+  <p class="wordmark">zither</p><h1>Continue to your workspace.</h1>
+  <p id="status" role="status">Sign in to connect the desktop app.</p>
+  <section id="signed-in" hidden><p id="account"></p><button id="continue">Continue to Zither</button><button id="signout" class="secondary">Use another account</button></section>
+  <section id="signed-out">
+    <div id="social"></div>
+    <form id="credentials">
+      <label>Username<input name="username" autocomplete="username" minlength="3" maxlength="30" required></label>
+      <label id="email-label" hidden>Email<input name="email" type="email" autocomplete="email"></label>
+      <label>Password<input name="password" type="password" autocomplete="current-password" minlength="12" required></label>
+      <button id="submit">Sign in</button>
+    </form>
+    <button id="toggle" class="secondary">Create an account</button>
+  </section>
+</main><script src="/assets/login.js" defer></script></body>
+</html>
