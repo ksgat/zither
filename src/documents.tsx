@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { CadDocument, DesktopBridge, DocumentPage, DocumentSearch, FeatureSnapshot } from '../shared/contracts.js';
 
-export function Documents({ api, document, connected, busy, perform, onSelect }: {
-  api: DesktopBridge; document: CadDocument | null; connected: boolean; busy: boolean;
+export function Documents({ api, document, connected, busy, refreshKey, perform, onSelect }: {
+  api: DesktopBridge; document: CadDocument | null; connected: boolean; busy: boolean; refreshKey: number;
   perform(label: string, action: () => Promise<unknown>): Promise<void>;
   onSelect(snapshot: FeatureSnapshot): void;
 }) {
@@ -24,7 +24,7 @@ export function Documents({ api, document, connected, busy, perform, onSelect }:
   useEffect(() => {
     if (!connected) setPage(null);
     else if (!document) void load({ query, filter, offset: 0 });
-  }, [connected, document]);
+  }, [connected, document, refreshKey]);
 
   if (document) return <section className="file-picker" aria-label="Document tabs">
     <p className="eyebrow">{document.workspaceName ?? 'SELECTED WORKSPACE'}</p>

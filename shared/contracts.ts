@@ -66,6 +66,7 @@ export type PublicState = {
   serverError?: string;
 };
 export type ChatEvent =
+  | { type: 'refresh' }
   | { type: 'text'; id: string; delta: string }
   | { type: 'activity'; id: string; name: string; status: 'running' | 'done' | 'error'; detail?: string }
   | { type: 'error'; message: string }

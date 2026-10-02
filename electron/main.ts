@@ -58,6 +58,7 @@ async function start() {
     if (event.type === 'snapshot') target = event.target;
     if (!window.isDestroyed()) window.webContents.send('zither:event', event);
   };
+  window.on('focus', () => { if (!busy && !changing) emit({ type: 'refresh' }); });
   const codex = codexLogin(url => shell.openExternal(url), id => emit({ type: 'auth_prompt', id }));
 
   async function browserAuth(action: (signal: AbortSignal) => Promise<void>) {
@@ -74,6 +75,7 @@ async function start() {
         serverError = messageOf(error);
       }
     }
+    if (user && !onshapeConnected && !serverError) { document = null; target = null; agent = undefined; }
     return { serverUrl, user, onshapeConnected, providers: (await store.credentials.list()).map(p => p.providerId),
       model: selection, document, target, busy, serverError };
   }
