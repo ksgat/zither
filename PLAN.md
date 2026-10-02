@@ -2,14 +2,14 @@
 
 Zither will be a separate Electron assistant for Onshape. Users keep designing in their browser and talk to Zither in a desktop window. Pi runs the agent locally, and CAD tools call Onshape's HTTP API.
 
-**Status:** Approved direction; the first pipeline is implemented in reviewable PRs. Live OAuth, inference, and CAD validation require configured accounts. This document records the longer-term milestones, not a claim that all acceptance checks have passed.
+**Status:** The first pipeline is implemented in reviewable PRs. Live Neon authentication, Onshape access, and Codex-driven parameter edits across two synthetic Part Studios have passed. This document records the longer-term milestones, not a claim that all acceptance checks have passed.
 
 ## Product experience
 
 1. Open Zither and sign in to a Zither account using Google, GitHub, or username and password. Password registration also collects an email address for recovery.
 2. Select **Connect Onshape**. The system browser opens Onshape's OAuth consent flow. If needed, the user signs in to Onshape there.
 3. Choose an AI connection: bring an API key, or sign in to Codex with a subscription.
-4. Paste the URL of an editable Onshape Part Studio into Zither. The app displays the connected document context and feature list.
+4. Browse Onshape documents, choose a document, then select a Part Studio before opening the agent. A Part Studio URL is also supported. The agent can inspect and edit other Part Studios in the chosen workspace.
 5. Ask something like “What controls this extrusion?” or “Change the depth of Extrude 1 to 25 mm.”
 6. Zither reads the actual feature parameters, explains or performs the requested change, and reports the result returned by Onshape. The user sees the updated design in Onshape.
 
@@ -47,7 +47,7 @@ The model runs through Pi on the user's computer. Model requests go directly to 
 
 All browser authentication opens in the system browser. Zither account login returns to the desktop through a short-lived, single-use code bound to a PKCE challenge and a validated loopback callback. OAuth state binds each authorization to the session that initiated it.
 
-Codex is the subscription connection, using Pi's `openai-codex` provider for browser OAuth, token refresh, model selection, and inference. The separate direct ChatGPT sign-in has been removed. Verify live subscription inference and the release distribution path before shipping.
+Codex is the subscription connection, using Pi's `openai-codex` provider for browser OAuth, token refresh, model selection, and inference. The separate direct ChatGPT sign-in has been removed. Live subscription inference has passed with synthetic CAD; the release distribution path still needs verification before shipping.
 
 ## First usable version
 
@@ -57,7 +57,7 @@ The first complete workflow is **connect an existing Part Studio, understand its
 - Onshape connection, token refresh, disconnect, and useful permission errors.
 - API key connection and model selection through Pi.
 - Codex subscription connection through Pi.
-- Explicit document selection by URL, with document/workspace/element IDs tracked together.
+- Document search, filters, pagination, and tab selection, with document/workspace/element IDs tracked together; optional URL entry for a specific workspace.
 - Streaming conversation, tool activity, cancellation, and starting a new chat.
 - Reading the feature tree and editable parameter expressions.
 - Editing a named feature parameter while preserving the rest of the feature definition.
@@ -67,7 +67,7 @@ This first version targets editable Part Studios on `cad.onshape.com` in the def
 
 ## CAD execution rules
 
-The agent receives purpose-built tools such as `get_part_studio_features` and `set_feature_parameter`. It does not need unrestricted shell access or a generic HTTP tool to edit CAD.
+The agent receives `list_elements`, `read_features(elementId)`, and `set_parameter(elementId, …)`, bound to the selected workspace. It does not need unrestricted shell access or a generic HTTP tool to edit CAD.
 
 Before an edit, read the current feature definition and resolve the feature ID, parameter ID, expression, and source microversion. Preserve fields that are not being edited. Send the source microversion with skew rejection so an intervening browser edit cannot be silently overwritten. [Onshape feature API documentation](https://onshape-public.github.io/docs/api-adv/featureaccess/)
 
@@ -143,4 +143,8 @@ No real credentials belong in Git. `.env.example` is a configuration template.
 
 The desktop, server routes, account handoff, Pi execution, model connections, and Onshape parameter adapter are implemented. Automated tests cover feature preservation, stale edits, uncertain writes, database sessions, agent tool execution, and local OAuth boundaries. A real Electron smoke test verifies the isolated renderer, IPC, controls, and encrypted local credentials.
 
-The Haskell compiler handles exact feature preservation, revision checks, and expression edits, backed by a pinned public API catalog. Live Neon migrations, account registration, username/password sign-in, desktop PKCE handoff, grant replay rejection, and sign-out have been verified with a temporary account that was removed afterward. Google/GitHub OAuth, Onshape access, and live model-to-CAD execution still need configuration and verification. Packaging into an installer, release signing, production account recovery, geometry selection, and broader CAD tools remain separate work.
+The Haskell compiler handles exact feature preservation, revision checks, and expression edits, backed by a pinned public API catalog. Live Neon migrations, account registration, username/password sign-in, desktop PKCE handoff, grant replay rejection, and sign-out have been verified with a temporary account that was removed afterward. Live Onshape document/tab discovery, token refresh, and Haskell feature import also passed.
+
+The live desktop → Codex → Pi → Haskell → Onshape path passed using a private synthetic document with two Part Studios. In one request, the agent discovered the tabs and changed an existing length variable from `20 mm` to `25 mm` in each studio, using five tool calls with no failures. Both edits returned rebuild status `OK` and passed fresh readback. Existing user designs were not sent to the model or edited by this check.
+
+Google/GitHub OAuth, live BYOK inference, production account recovery, installer packaging, release signing, topology selection, and broader CAD tools remain separate work. The synthetic variable check does not verify extrusion geometry, fillets, assemblies, or all release acceptance criteria.
