@@ -22,9 +22,34 @@ describe('Onshape document links', () => {
   ])('rejects unsupported target %s', url => expect(() => parseOnshapeUrl(url)).toThrow());
 });
 
+it('limits authentication recovery to one read retry', async () => {
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({}, { status: 401 }));
+  const refresh = vi.fn().mockResolvedValue('new-token');
+  const cad = new OnshapeClient('old-token', 'v17', fetcher, undefined, refresh);
+  await expect(cad.documents({ query: '', filter: 'all', offset: 0 })).rejects.toMatchObject({ code: 'expired_connection' });
+  expect(refresh).toHaveBeenCalledExactlyOnceWith('old-token');
+  expect(fetcher).toHaveBeenCalledTimes(2);
+});
+it('honors cancellation after refresh without resending the read', async () => {
+  const controller = new AbortController();
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({}, { status: 401 }));
+  const cad = new OnshapeClient('old-token', 'v17', fetcher, undefined, async () => { controller.abort(); return 'new-token'; });
+  await expect(cad.documents({ query: '', filter: 'all', offset: 0 }, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
 // Linux CI supplies the compiled binary: these exercise the real edit compiler,
 // not a TypeScript reimplementation. Onshape alone is mocked.
 describe.runIf(!!executable)('Haskell → Onshape edits', () => {
+  it('does not retry an unauthorized CAD write', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(list()))
+      .mockResolvedValueOnce(Response.json({}, { status: 401 }));
+    const refresh = vi.fn();
+    const cad = new OnshapeClient('token', 'v17', fetcher, haskellKernel(executable!), refresh);
+    await expect(cad.edit(edit)).rejects.toMatchObject({ code: 'expired_connection' });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(refresh).not.toHaveBeenCalled();
+  });
   it('POSTs the preserved feature and verifies the new expression and revision', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(list()))
       .mockResolvedValueOnce(reply()).mockResolvedValueOnce(Response.json(rebuilt()));

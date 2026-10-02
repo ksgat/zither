@@ -18,24 +18,35 @@ function failedFeatures(list: FeatureList): string[] | null {
 
 export class OnshapeClient {
   constructor(private accessToken: string, private version = 'v17', private fetcher: typeof fetch = fetch,
-    private kernel: CadKernel = unavailableKernel) {}
+    private kernel: CadKernel = unavailableKernel, private refreshAccess?: (rejected: string) => Promise<string>) {}
   private path(t: OnshapeTarget) {
     targetSchema.parse(t);
     return `/partstudios/d/${t.documentId}/w/${t.workspaceId}/e/${t.elementId}`;
   }
   private async request(path: string, body?: unknown, signal?: AbortSignal) {
     signal?.throwIfAborted();
-    let response: Response;
-    try {
-      response = await this.fetcher(`https://cad.onshape.com/api/${this.version}${path}`, {
-      method: body ? 'POST' : 'GET', redirect: 'error', signal: AbortSignal.any([AbortSignal.timeout(30_000), ...(signal ? [signal] : [])]),
-      headers: { Authorization: `Bearer ${this.accessToken}`, Accept: 'application/json', 'Content-Type': 'application/json' },
-      body: body ? JSON.stringify(body) : undefined,
-      });
-    } catch {
-      throw new AppError(body ? 'write_outcome_unknown' : 'onshape_unavailable', body
-        ? 'The edit response was lost. It may have applied. Inspect Onshape before issuing another edit.'
-        : 'Could not reach Onshape.', 502);
+    const send = async (accessToken: string) => {
+      signal?.throwIfAborted();
+      try {
+        return await this.fetcher(`https://cad.onshape.com/api/${this.version}${path}`, {
+          method: body ? 'POST' : 'GET', redirect: 'error', signal: AbortSignal.any([AbortSignal.timeout(30_000), ...(signal ? [signal] : [])]),
+          headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', 'Content-Type': 'application/json' },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+      } catch {
+        throw new AppError(body ? 'write_outcome_unknown' : 'onshape_unavailable', body
+          ? 'The edit response was lost. It may have applied. Inspect Onshape before issuing another edit.'
+          : 'Could not reach Onshape.', 502);
+      }
+    };
+    const accessToken = this.accessToken;
+    let response = await send(accessToken);
+    // Reads can recover once from an early token rejection. Never replay a CAD write.
+    if (response.status === 401 && !body && this.refreshAccess) {
+      await response.body?.cancel();
+      signal?.throwIfAborted();
+      this.accessToken = await this.refreshAccess(accessToken);
+      response = await send(this.accessToken);
     }
     if (!response.ok) {
       if (response.status === 429) throw new AppError('rate_limit', 'Onshape API limit reached. Wait before trying again.', 429);
