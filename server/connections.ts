@@ -19,11 +19,33 @@ export function onshapeConnections(db: Pool, config: Config, fetcher: typeof fet
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ ...values, client_id: config.clientId, client_secret: config.clientSecret }),
     });
+    if (response.status === 429 || response.status >= 500) throw new AppError('onshape_auth_unavailable', 'Onshape sign-in is temporarily unavailable. Try again shortly.', 503);
     if (!response.ok) throw new AppError('onshape_auth_failed', 'Onshape authorization failed. Reconnect Onshape.', 401);
     const data = tokenSchema.parse(await response.json());
     const refresh = data.refresh_token ?? previousRefresh;
     if (!refresh) throw new AppError('onshape_auth_failed', 'Onshape did not return a refresh token.', 502);
     return { access: data.access_token, refresh, expires: Date.now() + data.expires_in * 1000 };
+  }
+
+  async function credentials(userId: string, rejectedAccess?: string): Promise<Tokens> {
+    const connection = await db.connect();
+    try {
+      await connection.query('BEGIN');
+      // The row lock serializes refresh across server processes and prevents token rotation races.
+      const { rows } = await connection.query('SELECT credentials FROM onshape_connections WHERE user_id=$1 FOR UPDATE', [userId]);
+      if (!rows[0]) throw new AppError('not_connected', 'Connect Onshape first.', 409);
+      let tokens = vault.open<Tokens>(rows[0].credentials, userId);
+      // A concurrent request may already have replaced the rejected token.
+      if (tokens.expires < Date.now() + 60_000 || tokens.access === rejectedAccess) {
+        tokens = await exchange({ grant_type: 'refresh_token', refresh_token: tokens.refresh }, tokens.refresh);
+        await connection.query('UPDATE onshape_connections SET credentials=$2, updated_at=now() WHERE user_id=$1', [userId, vault.seal(tokens, userId)]);
+      }
+      await connection.query('COMMIT');
+      return tokens;
+    } catch (error) {
+      await connection.query('ROLLBACK');
+      throw error;
+    } finally { connection.release(); }
   }
 
   return {
@@ -56,23 +78,9 @@ export function onshapeConnections(db: Pool, config: Config, fetcher: typeof fet
       await db.query('DELETE FROM onshape_oauth_states WHERE user_id=$1', [userId]);
     },
     async client(userId: string) {
-      const connection = await db.connect();
-      try {
-        await connection.query('BEGIN');
-        // The row lock serializes refresh across server processes and prevents token rotation races.
-        const { rows } = await connection.query('SELECT credentials FROM onshape_connections WHERE user_id=$1 FOR UPDATE', [userId]);
-        if (!rows[0]) throw new AppError('not_connected', 'Connect Onshape first.', 409);
-        let tokens = vault.open<Tokens>(rows[0].credentials, userId);
-        if (tokens.expires < Date.now() + 60_000) {
-          tokens = await exchange({ grant_type: 'refresh_token', refresh_token: tokens.refresh }, tokens.refresh);
-          await connection.query('UPDATE onshape_connections SET credentials=$2, updated_at=now() WHERE user_id=$1', [userId, vault.seal(tokens, userId)]);
-        }
-        await connection.query('COMMIT');
-        return new OnshapeClient(tokens.access, config.apiVersion, fetcher, kernel);
-      } catch (error) {
-        await connection.query('ROLLBACK');
-        throw error;
-      } finally { connection.release(); }
+      const tokens = await credentials(userId);
+      return new OnshapeClient(tokens.access, config.apiVersion, fetcher, kernel,
+        async rejected => (await credentials(userId, rejected)).access);
     },
   };
 }
