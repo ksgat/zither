@@ -6,6 +6,7 @@
   "description": "A Pi-powered desktop CAD assistant for Onshape",
   "main": "dist/electron/main.js",
   "scripts": {
+    "setup": "node scripts/setup.mjs",
     "dev": "node scripts/dev.mjs",
     "dev:web": "vite --host 127.0.0.1",
     "dev:server": "tsx watch --env-file=.env server/index.ts",
@@ -13,6 +14,7 @@
     "start": "electron .",
     "server": "tsx --env-file=.env server/index.ts",
     "db:migrate": "tsx --env-file=.env server/migrate.ts",
+    "db:check": "tsx --env-file=.env server/migrate.ts --check",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:desktop": "node scripts/smoke-electron.mjs"
