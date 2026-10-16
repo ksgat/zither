@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { targetSchema, editSchema, type EditResult, type FeatureSnapshot, type OnshapeTarget, type ParameterEdit } from '../shared/contracts.js';
+import { targetSchema, workspaceSchema, onshapeId, documentSearchSchema, editSchema, type CadDocument, type DocumentPage,
+  type DocumentSearch, type OnshapeWorkspace, type EditResult, type FeatureSnapshot, type OnshapeTarget, type ParameterEdit } from '../shared/contracts.js';
 import { AppError } from '../shared/errors.js';
 import { unavailableKernel, type CadKernel } from './kernel.js';
 
@@ -42,10 +43,48 @@ export class OnshapeClient {
       if (response.status === 403) throw new AppError('access_denied', 'Onshape denied access. Check document permissions and OAuth read/write scopes.', 403);
       if (response.status === 409) throw new AppError('stale_workspace', 'The Part Studio changed. Read its features again before editing.', 409);
       if (body && response.status >= 500) throw new AppError('write_outcome_unknown', 'Onshape failed during an edit. Inspect the workspace before issuing another edit.', 502);
-      throw new Error(`Onshape request failed (${response.status}). Check that the link points to a Part Studio.`);
+      throw new AppError('onshape_request_failed', `Onshape request failed (${response.status}). Check that the document or tab is still accessible.`, 502);
     }
     try { return await response.json(); }
     catch { throw new AppError(body ? 'write_outcome_unknown' : 'invalid_response', 'Onshape returned an unreadable response. Inspect the workspace before continuing.', 502); }
+  }
+  async documents(input: DocumentSearch, signal?: AbortSignal): Promise<DocumentPage> {
+    const search = documentSearchSchema.parse(input);
+    const query = new URLSearchParams({ q: search.query, filter: String({ all: 0, shared: 2, recent: 5 }[search.filter]),
+      offset: String(search.offset), limit: '20', sortColumn: 'modifiedAt', sortOrder: 'desc' });
+    const page = z.object({ items: z.array(z.object({ id: onshapeId, name: z.string(), isContainer: z.boolean().optional() })),
+      next: z.string().nullish() }).parse(await this.request(`/documents?${query}`, undefined, signal));
+    let nextOffset: number | null = null;
+    if (page.next) {
+      // Use only the documented cursor; never forward OAuth credentials to an upstream URL.
+      const next = new URL(page.next, 'https://cad.onshape.com');
+      const offset = next.searchParams.get('offset');
+      if (next.origin !== 'https://cad.onshape.com' || next.username || next.password ||
+        !/^\/api(?:\/v\d+)?\/documents$/.test(next.pathname) || !offset || !/^\d+$/.test(offset) ||
+        !Number.isSafeInteger(Number(offset)) || Number(offset) <= search.offset) {
+        throw new AppError('invalid_response', 'Onshape returned an invalid document page.', 502);
+      }
+      nextOffset = Number(offset);
+    }
+    return { items: page.items.filter(item => !item.isContainer).map(({ id, name }) => ({ id, name })), nextOffset };
+  }
+  async document(documentId: string, workspaceId?: string, signal?: AbortSignal): Promise<CadDocument> {
+    onshapeId.parse(documentId);
+    if (workspaceId !== undefined) onshapeId.parse(workspaceId);
+    const doc = z.object({ id: onshapeId, name: z.string(), defaultWorkspace: z.object({ id: onshapeId, name: z.string() }).nullish() })
+      .parse(await this.request(`/documents/${documentId}`, undefined, signal));
+    if (doc.id !== documentId) throw new AppError('invalid_response', 'Onshape returned a different document.', 502);
+    const selected = workspaceId ?? doc.defaultWorkspace?.id;
+    if (!selected) throw new AppError('no_workspace', 'This document has no accessible workspace. Open a workspace in Onshape and paste a Part Studio link.', 409);
+    const workspace = { documentId, workspaceId: selected };
+    return { ...workspace, name: doc.name, workspaceName: selected === doc.defaultWorkspace?.id ? doc.defaultWorkspace.name : undefined,
+      elements: await this.elements(workspace, signal) };
+  }
+  async elements(input: OnshapeWorkspace, signal?: AbortSignal) {
+    const { documentId, workspaceId } = workspaceSchema.parse(input);
+    const elements = z.array(z.object({ id: onshapeId, name: z.string(), elementType: z.string(), deleted: z.boolean().optional() }))
+      .parse(await this.request(`/documents/d/${documentId}/w/${workspaceId}/elements`, undefined, signal));
+    return elements.filter(element => !element.deleted).map(({ id, name, elementType }) => ({ id, name, elementType }));
   }
   async read(target: OnshapeTarget, signal?: AbortSignal) {
     return featureListSchema.parse(await this.request(`${this.path(target)}/features?rollbackBarIndex=-1&includeGeometryIds=true&noSketchGeometry=false`, undefined, signal));

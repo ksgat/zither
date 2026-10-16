@@ -1,4 +1,4 @@
-import type { CadClient, EditResult, FeatureSnapshot } from '../shared/contracts.js';
+import type { CadClient, CadDocument, CadElement, DocumentPage, EditResult, FeatureSnapshot } from '../shared/contracts.js';
 import { AppError } from '../shared/errors.js';
 
 export function serverApi(origin: string, token: () => string | undefined) {
@@ -19,6 +19,9 @@ export function serverApi(origin: string, token: () => string | undefined) {
     return data;
   }
   const cad: CadClient = {
+    documents: (search, signal) => request<DocumentPage>('/api/cad/documents', search, 'POST', signal),
+    document: (documentId, workspaceId, signal) => request<CadDocument>('/api/cad/document', { documentId, workspaceId }, 'POST', signal),
+    elements: (workspace, signal) => request<CadElement[]>('/api/cad/elements', workspace, 'POST', signal),
     inspect: (target, signal) => request<FeatureSnapshot>('/api/cad/features', target, 'POST', signal),
     edit: (edit, signal) => request<EditResult>('/api/cad/parameter', edit, 'POST', signal),
   };

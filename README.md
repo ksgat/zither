@@ -6,7 +6,7 @@ Zither runs in its own Electron window. Onshape stays in the user's browser. The
 
 ## Project status
 
-The first pipeline is implemented: Electron → local Pi agent → authenticated Zither server → Haskell edit compiler → Onshape. It can read a Part Studio and edit an existing expression parameter. OAuth and live CAD access still require your service configuration and end-to-end verification.
+The first pipeline is implemented: Electron → local Pi agent → authenticated Zither server → Haskell edit compiler → Onshape. Browse documents, choose a Part Studio, then read and edit existing expression parameters across Part Studios in that document. OAuth and live CAD access still require your service configuration and end-to-end verification.
 
 Live Neon setup has been verified through account registration, password sign-in, the desktop session handoff, replay rejection, and sign-out. The temporary test account was removed. Connection strings and app secrets remain local in the ignored `.env`.
 
@@ -78,7 +78,9 @@ Sign in to Zither in the system browser, connect Onshape, and select **Refresh c
 
 Upgrading removes credentials from the retired direct ChatGPT sign-in and clears its model selection. Existing API keys and Codex connections are preserved.
 
-Paste the URL of an editable Part Studio in its default configuration. Try “Explain this feature tree,” then an explicit dimension edit such as “Change Extrude 1 depth to 25 mm.” The agent re-reads the feature data for each user request and preserves the rest of the edited feature. A changed microversion rejects the write. Failed or uncertain writes stop further edits for that request.
+After connecting Onshape, the desktop opens a document picker with search, My documents / Shared with me / Recent filters, and paging. Choose a document to see its tabs, then a Part Studio to open the conversation. Assemblies, drawings, and other tab types are listed but cannot be selected for editing yet. Documents open in their default workspace; the optional Part Studio link entry preserves a different workspace from its URL. Only default configurations are supported. Use **Choose file** to return to the picker and start with another document.
+
+Try “Explain this feature tree,” then an explicit dimension edit such as “Change Extrude 1 depth to 25 mm.” The agent uses `list_elements`, `read_features(elementId)`, and `set_parameter(elementId, …)` to work across Part Studios within the chosen document. Each request discovers tabs and reads fresh feature data; a write invalidates observations of other tabs. Features remain bound to their owning tab and the Haskell compiler preserves the rest of each payload. A changed microversion rejects the write. Failed or uncertain writes stop all further edits for that request. Multiple writes are sequential, not an atomic transaction; cross-tab dependencies and assembly rebuild verification are not implemented.
 
 Changing documents, model connections, or Zither accounts starts a fresh conversation. Chat history is currently in memory. Stopping cancels local work; a write already accepted by Onshape cannot be undone by cancellation. Disconnecting Onshape removes Zither's stored tokens; revoke the application's grant in Onshape to revoke it at the provider too.
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { ChatEvent, DesktopBridge, FeatureSnapshot, ModelOption, PublicState } from '../shared/contracts.js';
 import './style.css';
+import { Documents } from './documents.js';
 
 declare global { interface Window { zither?: DesktopBridge } }
 type Entry = { id: string; role: 'user' | 'assistant' | 'tool'; text: string; status?: string; detail?: string };
@@ -15,7 +16,7 @@ function App() {
   const [error, setError] = useState('');
   const [working, setWorking] = useState('');
   const [running, setRunning] = useState(false);
-  const [url, setUrl] = useState('');
+  const [observedElement, setObservedElement] = useState('');
   const [prompt, setPrompt] = useState('');
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
@@ -38,7 +39,7 @@ function App() {
     void refresh().catch(error => setError(error.message));
     void api.models().then(setModels).catch(error => setError(error.message));
     return api.onEvent((event: ChatEvent) => {
-      if (event.type === 'snapshot') setSnapshot(event.snapshot);
+      if (event.type === 'snapshot') { setSnapshot(event.snapshot); setObservedElement(event.target.elementId); }
       if (event.type === 'error') setError(event.message);
       if (event.type === 'auth_prompt') setAuthPrompt(event.id);
       if (event.type === 'done') setRunning(false);
@@ -46,7 +47,7 @@ function App() {
         ? items.map(item => item.id === event.id ? { ...item, text: item.text + event.delta } : item)
         : [...items, { id: event.id, role: 'assistant', text: event.delta }]);
       if (event.type === 'activity') setEntries(items => {
-        const entry: Entry = { id: event.id, role: 'tool', text: event.name === 'read_features' ? 'Read feature tree' : 'Edit parameter', status: event.status, detail: event.detail };
+        const entry: Entry = { id: event.id, role: 'tool', text: ({ list_elements: 'List document tabs', read_features: 'Read feature tree', set_parameter: 'Edit parameter' } as Record<string, string>)[event.name] ?? event.name, status: event.status, detail: event.detail };
         return items.some(item => item.id === event.id) ? items.map(item => item.id === event.id ? entry : item) : [...items, entry];
       });
     });
@@ -78,6 +79,7 @@ function App() {
         <div className="connection"><span>Onshape</span><span className={state?.onshapeConnected ? 'connected' : 'muted'}>{state?.onshapeConnected ? 'Connected' : 'Not connected'}</span></div>
         <button disabled={busy || !state?.user} onClick={() => perform('Connecting Onshape', () => state?.onshapeConnected ? api.disconnectOnshape() : api.connectOnshape())}>
           {state?.onshapeConnected ? 'Disconnect Onshape' : 'Connect Onshape ↗'}</button>
+        {state?.onshapeConnected && <button className="text-button" disabled={busy} onClick={() => perform('Reconnecting Onshape', () => api.connectOnshape())}>Reconnect Onshape ↗</button>}
         <button className="text-button" disabled={busy} onClick={() => perform('Refreshing connections', async () => { await refresh(); await updateModels(); })}>Refresh connections</button>
       </section>
       <section>
@@ -116,16 +118,15 @@ function App() {
       <div className="sidebar-footer">Early build <span>01</span></div>
     </aside>
     <main>
-      <header><div><h1>Workspace</h1><p>{state?.target ? 'Part Studio connected' : 'Connect an existing design to begin.'}</p></div>
-        <button className="text-button" disabled={busy} onClick={() => perform('Opening Onshape', () => api.openOnshape())}>Open Onshape ↗</button></header>
-      <form className="document-form" onSubmit={event => { event.preventDefault(); void perform('Reading Part Studio', async () => {
-        setSnapshot(await api.setTarget(url)); setEntries([]);
-      }); }}>
-        <label className="sr-only" htmlFor="document-url">Onshape Part Studio URL</label>
-        <input id="document-url" type="url" placeholder="Paste an Onshape Part Studio link" value={url} onChange={event => setUrl(event.target.value)} disabled={busy} required />
-        <button disabled={busy || !state?.onshapeConnected}>Connect</button>
-      </form>
-      {snapshot && <details className="features"><summary>{snapshot.features.length} features <span className="muted">· {snapshot.microversion.slice(0, 8)}</span></summary>
+      <header><div><h1>{state?.document?.name ?? 'Documents'}</h1><p>{state?.document ? state.document.workspaceName ?? 'Selected workspace' : 'Choose a design before starting a conversation.'}</p></div>
+        <div className="header-actions">{state?.target && <button disabled={busy} onClick={() => perform('Loading documents', async () => {
+          await api.closeDocument(); setEntries([]); setPrompt(''); setObservedElement('');
+        })}>Choose file</button>}
+        <button className="text-button" disabled={busy} onClick={() => perform('Opening Onshape', () => api.openOnshape())}>Open Onshape ↗</button></div></header>
+      {!state?.target && <Documents api={api} document={state?.document ?? null} connected={!!state?.onshapeConnected} busy={busy} perform={perform}
+        onSelect={value => { setSnapshot(value); setObservedElement(''); setEntries([]); setPrompt(''); }} />}
+      {state?.target && <>
+      {snapshot && <details className="features"><summary>{state.document?.elements.find(element => element.id === (observedElement || state.target?.elementId))?.name ?? 'Part Studio'} · {snapshot.features.length} features <span className="muted">· {snapshot.microversion.slice(0, 8)}</span></summary>
         <div className="feature-list">{snapshot.features.map(feature => <details key={feature.id}><summary>{feature.name} <span className="muted">{feature.suppressed ? 'suppressed' : feature.type}</span></summary>
           {feature.parameters.length ? <dl>{feature.parameters.map(parameter => <div key={parameter.id}><dt>{parameter.id}</dt><dd>{parameter.expression}</dd></div>)}</dl> : <p className="hint">No editable expressions.</p>}
         </details>)}</div><button disabled={busy} onClick={() => perform('Reading Part Studio', async () => setSnapshot(await api.inspect()))}>Refresh features</button>
@@ -141,17 +142,19 @@ function App() {
         </details> : <article key={entry.id} className={`message ${entry.role}`}><span className="author">{entry.role === 'user' ? 'You' : 'Zither'}</span><p>{entry.text}</p></article>)}
         <div ref={bottom} />
       </div>
+      </>}
       {(error || state?.serverError) && <div className="error" role="alert">{error || state?.serverError}<button aria-label="Dismiss error" onClick={() => { setError(''); setState(value => value ? { ...value, serverError: undefined } : value); }}>×</button></div>}
       <footer>
-        <form className="composer" onSubmit={send}>
+        {state?.target && <form className="composer" onSubmit={send}>
           <label className="sr-only" htmlFor="prompt">Message Zither</label>
           <textarea id="prompt" placeholder="Describe the change…" value={prompt} maxLength={16000} rows={2} disabled={busy}
             onChange={event => setPrompt(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
           {busy ? <button type="button" onClick={() => void api.stop().catch(error => setError(error.message))}>Stop</button>
             : <button className="send" aria-label="Send message" disabled={!prompt.trim() || !state?.target || !state.model}>↑</button>}
-        </form>
-        <div className="footer-line"><span role="status">{working || (running ? 'Working on your request…' : state?.target ? 'Connected to your Part Studio' : 'Connect accounts, choose a model, then add a Part Studio.')}</span>
-          <button className="text-button" disabled={busy || !entries.length} onClick={() => perform('Starting new chat', async () => { await api.newChat(); setEntries([]); })}>New chat</button></div>
+        </form>}
+        <div className="footer-line"><span role="status">{working || (running ? 'Working on your request…' : state?.target ? 'Connected to your document' : state?.onshapeConnected ? 'Choose a document and Part Studio to start.' : 'Connect Onshape to browse your documents.')}</span>
+          {!state?.target && busy && <button onClick={() => void api.stop().catch(error => setError(error.message))}>Stop</button>}
+          {state?.target && <button className="text-button" disabled={busy || !entries.length} onClick={() => perform('Starting new chat', async () => { await api.newChat(); setEntries([]); })}>New chat</button>}</div>
       </footer>
     </main>
   </div>;
