@@ -6,9 +6,11 @@ Zither runs in its own Electron window. Onshape stays in the user's browser. The
 
 ## Project status
 
-The first pipeline is implemented: Electron → local Pi agent → authenticated Zither server → Haskell edit compiler → Onshape. Browse documents, choose a Part Studio, then read and edit existing expression parameters across Part Studios in that document. OAuth and live CAD access still require your service configuration and end-to-end verification.
+The first pipeline is implemented and has passed a live Codex-to-Onshape check: Electron → local Pi agent → authenticated Zither server → Haskell edit compiler → Onshape. Browse documents, choose a Part Studio, then read and edit existing expression parameters across Part Studios in that document. Each installation still needs its own service configuration.
 
 Live Neon setup has been verified through account registration, password sign-in, the desktop session handoff, replay rejection, and sign-out. The temporary test account was removed. Connection strings and app secrets remain local in the ignored `.env`.
+
+Live verification used a private synthetic document with two Part Studios. One request through the desktop's Codex connection changed an existing length variable from `20 mm` to `25 mm` in both studios, using five tool calls. Both edits rebuilt with `OK` status and passed a fresh readback. This verifies the parameter-editing pipeline; it does not establish reliability on arbitrary geometry or assemblies.
 
 The UI is provisional. Its styling lives in [src/style.css](src/style.css), ready to replace with a Figma reference and your chosen fonts. Keep implementation small: native controls, direct functions, and no framework around a problem that does not need one.
 
@@ -72,13 +74,15 @@ The server has no proxy-trust configuration by default. Configure trusted proxy 
 
 ## Use it
 
-Sign in to Zither in the system browser, connect Onshape, and select **Refresh connections** after returning from Onshape consent. Add a model API key or choose **Sign in to Codex**, then select a model. OpenAI API keys and Codex subscriptions have separate connections.
+Sign in to Zither in the system browser, connect Onshape, and return to the desktop to load your documents. **Refresh connections** is available if needed. Add a model API key or choose **Sign in to Codex**, then select a model. OpenAI API keys and Codex subscriptions have separate connections.
 
-**Sign in to Codex** uses Pi’s `openai-codex` browser login, transport, and model catalog. Complete sign-in in your browser, then choose an `openai-codex` model. If the browser cannot return (for example, port 1455 is occupied), expand **Browser didn’t return?** and paste the full localhost callback link. **Stop** cancels sign-in. Tokens stay in the local OS-encrypted store. Live inference still needs verification with a real subscription.
+**Sign in to Codex** uses Pi’s `openai-codex` browser login, transport, and model catalog. Complete sign-in in your browser, then choose an `openai-codex` model. If the browser cannot return (for example, port 1455 is occupied), expand **Browser didn’t return?** and paste the full localhost callback link. **Stop** cancels sign-in. Tokens stay in the local OS-encrypted store. Live subscription inference has been verified through the synthetic CAD edit described above; BYOK inference still needs a live check.
 
 Upgrading removes credentials from the retired direct ChatGPT sign-in and clears its model selection. Existing API keys and Codex connections are preserved.
 
 After connecting Onshape, the desktop opens a document picker with search, My documents / Shared with me / Recent filters, and paging. Choose a document to see its tabs, then a Part Studio to open the conversation. Assemblies, drawings, and other tab types are listed but cannot be selected for editing yet. Documents open in their default workspace; the optional Part Studio link entry preserves a different workspace from its URL. Only default configurations are supported. Use **Choose file** to return to the picker and start with another document.
+
+Returning to the idle desktop after browser sign-in refreshes the connection and visible document picker automatically. If the connection has been removed, the desktop clears the old CAD selection. Onshape reads can refresh a rejected token once; CAD writes are never replayed automatically.
 
 Try “Explain this feature tree,” then an explicit dimension edit such as “Change Extrude 1 depth to 25 mm.” The agent uses `list_elements`, `read_features(elementId)`, and `set_parameter(elementId, …)` to work across Part Studios within the chosen document. Each request discovers tabs and reads fresh feature data; a write invalidates observations of other tabs. Features remain bound to their owning tab and the Haskell compiler preserves the rest of each payload. A changed microversion rejects the write. Failed or uncertain writes stop all further edits for that request. Multiple writes are sequential, not an atomic transaction; cross-tab dependencies and assembly rebuild verification are not implemented.
 

@@ -61,7 +61,7 @@ export function createApp(auth: typeof authType, sessions: ReturnType<typeof des
     const state = z.string().regex(/^[A-Za-z0-9_-]{43}$/).parse(req.query.state);
     const code = z.string().min(1).max(2048).parse(req.query.code);
     await connections.finish(user.id, state, code);
-    res.type('text').send('Onshape connected. Return to Zither and refresh your connection.');
+    res.type('text').send('Onshape connected. Return to Zither; your documents will load automatically.');
   });
   app.delete('/api/onshape', async (req, res) => {
     const user = await sessions.user(req.headers.authorization);

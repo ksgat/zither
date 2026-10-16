@@ -71,7 +71,7 @@ try {
     const documentId = 'a'.repeat(24), workspaceId = 'b'.repeat(24), base = 'c'.repeat(24), cover = 'd'.repeat(24);
     const elements = [{ id: base, name: 'Base', elementType: 'PARTSTUDIO' }, { id: cover, name: 'Cover', elementType: 'PARTSTUDIO' },
       { id: 'e'.repeat(24), name: 'Drawing', elementType: 'DRAWING' }];
-    globalThis.documentTest = { requests: [], restore: () => { shell.openExternal = openExternal; globalThis.fetch = originalFetch; } };
+    globalThis.documentTest = { connected: false, requests: [], restore: () => { shell.openExternal = openExternal; globalThis.fetch = originalFetch; } };
     globalThis.fetch = async (url, options) => {
       const request = new URL(String(url));
       if (request.origin !== 'http://localhost:3001') throw new Error('Unexpected smoke-test network request');
@@ -79,7 +79,7 @@ try {
       globalThis.documentTest.requests.push({ path: request.pathname, body });
       switch (request.pathname) {
         case '/desktop/exchange': return Response.json({ token: 'smoke-desktop-token' });
-        case '/api/session': return Response.json({ user: { name: 'Test user', email: 'test@example.test' }, onshapeConnected: true });
+        case '/api/session': return Response.json({ user: { name: 'Test user', email: 'test@example.test' }, onshapeConnected: globalThis.documentTest.connected });
         case '/api/cad/documents': return Response.json(body.query
           ? { items: [{ id: documentId, name: 'Search result' }], nextOffset: null }
           : body.offset ? { items: [{ id: 'f'.repeat(24), name: 'Gearbox' }], nextOffset: null }
@@ -99,6 +99,12 @@ try {
     };
   });
   await window.getByRole('button', { name: 'Sign in to Zither' }).click();
+  await window.getByRole('button', { name: 'Sign out', exact: true }).waitFor();
+  await window.waitForFunction(() => ![...document.querySelectorAll('button')].find(button => button.textContent === 'Sign out')?.disabled);
+  assert.equal(await window.getByRole('button', { name: 'Bracket' }).count(), 0);
+  // The account was connected in the system browser. Returning to the app must
+  // refresh the session and load the picker without a manual Refresh click.
+  await app.evaluate(({ BrowserWindow }) => { globalThis.documentTest.connected = true; BrowserWindow.getAllWindows()[0].emit('focus'); });
   await window.getByRole('button', { name: 'Bracket' }).waitFor();
   await window.screenshot({ path: '.local/desktop-documents.png' });
   await window.getByRole('button', { name: 'Load more', exact: true }).click();
@@ -124,6 +130,14 @@ try {
   await window.getByRole('button', { name: 'Choose file', exact: true }).click();
   await window.getByRole('button', { name: 'Bracket' }).waitFor();
   assert.equal(await window.getByRole('log', { name: 'Conversation' }).count(), 0);
+  await window.getByRole('button', { name: 'Bracket' }).click();
+  await window.getByRole('button', { name: 'Base Part Studio' }).click();
+  await window.getByRole('textbox', { name: 'Message Zither' }).waitFor();
+  await app.evaluate(({ BrowserWindow }) => { globalThis.documentTest.connected = false; BrowserWindow.getAllWindows()[0].emit('focus'); });
+  await window.getByRole('heading', { name: 'Choose a document' }).waitFor();
+  assert.equal((await window.evaluate(() => window.zither.state())).target, null);
+  assert.equal((await window.evaluate(() => window.zither.state())).document, null);
+  assert.equal(await window.getByRole('textbox', { name: 'Message Zither' }).count(), 0);
   const requests = await app.evaluate(() => globalThis.documentTest.requests);
   assert.ok(requests.some(request => request.path === '/api/cad/documents' && request.body.offset === 7));
   assert.ok(requests.some(request => request.path === '/api/cad/documents' && request.body.filter === 'shared'));

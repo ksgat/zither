@@ -19,6 +19,7 @@ function App() {
   const [observedElement, setObservedElement] = useState('');
   const [prompt, setPrompt] = useState('');
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
+  const [filesRevision, setFilesRevision] = useState(0);
   const bottom = useRef<HTMLDivElement>(null);
   const busy = !!working || running;
 
@@ -39,6 +40,7 @@ function App() {
     void refresh().catch(error => setError(error.message));
     void api.models().then(setModels).catch(error => setError(error.message));
     return api.onEvent((event: ChatEvent) => {
+      if (event.type === 'refresh') void refresh().then(() => setFilesRevision(value => value + 1)).catch(error => setError(error.message));
       if (event.type === 'snapshot') { setSnapshot(event.snapshot); setObservedElement(event.target.elementId); }
       if (event.type === 'error') setError(event.message);
       if (event.type === 'auth_prompt') setAuthPrompt(event.id);
@@ -123,7 +125,7 @@ function App() {
           await api.closeDocument(); setEntries([]); setPrompt(''); setObservedElement('');
         })}>Choose file</button>}
         <button className="text-button" disabled={busy} onClick={() => perform('Opening Onshape', () => api.openOnshape())}>Open Onshape ↗</button></div></header>
-      {!state?.target && <Documents api={api} document={state?.document ?? null} connected={!!state?.onshapeConnected} busy={busy} perform={perform}
+      {!state?.target && <Documents api={api} document={state?.document ?? null} connected={!!state?.onshapeConnected} busy={busy} refreshKey={filesRevision} perform={perform}
         onSelect={value => { setSnapshot(value); setObservedElement(''); setEntries([]); setPrompt(''); }} />}
       {state?.target && <>
       {snapshot && <details className="features"><summary>{state.document?.elements.find(element => element.id === (observedElement || state.target?.elementId))?.name ?? 'Part Studio'} · {snapshot.features.length} features <span className="muted">· {snapshot.microversion.slice(0, 8)}</span></summary>
