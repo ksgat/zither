@@ -20,7 +20,7 @@ The priority is editing human-made designs well. Fillet creation, topology selec
 - Neon Postgres for accounts, sessions, and encrypted Onshape credentials.
 - Onshape OAuth and REST APIs for CAD access.
 - Haskell for lossless feature-tree import and sparse edit compilation, with the complete public API catalog pinned locally.
-- User-provided model API keys or ChatGPT sign-in for inference.
+- User-provided model API keys or Codex subscription sign-in for inference.
 
 ## Development prerequisites
 
@@ -64,13 +64,15 @@ The server has no proxy-trust configuration by default. Configure trusted proxy 
 
 ## Use it
 
-Sign in to Zither in the system browser, connect Onshape, and select **Refresh connections** after returning from Onshape consent. Add a model API key or choose **Continue with ChatGPT**, then select a model. An OpenAI API key and ChatGPT use the same provider slot; connecting one replaces the other.
+Sign in to Zither in the system browser, connect Onshape, and select **Refresh connections** after returning from Onshape consent. Add a model API key or choose **Sign in to Codex**, then select a model. OpenAI API keys and Codex subscriptions have separate connections.
+
+**Sign in to Codex** uses Pi’s `openai-codex` browser login, transport, and model catalog. Complete sign-in in your browser, then choose an `openai-codex` model. If the browser cannot return (for example, port 1455 is occupied), expand **Browser didn’t return?** and paste the full localhost callback link. **Stop** cancels sign-in. Tokens stay in the local OS-encrypted store. Live inference still needs verification with a real subscription.
+
+Upgrading removes credentials from the retired direct ChatGPT sign-in and clears its model selection. Existing API keys and Codex connections are preserved.
 
 Paste the URL of an editable Part Studio in its default configuration. Try “Explain this feature tree,” then an explicit dimension edit such as “Change Extrude 1 depth to 25 mm.” The agent re-reads the feature data for each user request and preserves the rest of the edited feature. A changed microversion rejects the write. Failed or uncertain writes stop further edits for that request.
 
 Changing documents, model connections, or Zither accounts starts a fresh conversation. Chat history is currently in memory. Stopping cancels local work; a write already accepted by Onshape cannot be undone by cancellation. Disconnecting Onshape removes Zither's stored tokens; revoke the application's grant in Onshape to revoke it at the provider too.
-
-ChatGPT uses the documented local-app plan-usage flow, verifies the ID token, and requests the account's current model catalog. Eligibility and production distribution must be validated for Zither before release. [OpenAI documentation](https://developers.openai.com/siwc/token-sharing-open-source)
 
 ## Validate
 

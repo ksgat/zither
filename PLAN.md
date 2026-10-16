@@ -8,7 +8,7 @@ Zither will be a separate Electron assistant for Onshape. Users keep designing i
 
 1. Open Zither and sign in to a Zither account using Google, GitHub, or username and password. Password registration also collects an email address for recovery.
 2. Select **Connect Onshape**. The system browser opens Onshape's OAuth consent flow. If needed, the user signs in to Onshape there.
-3. Choose an AI connection: bring an API key, or sign in with ChatGPT.
+3. Choose an AI connection: bring an API key, or sign in to Codex with a subscription.
 4. Paste the URL of an editable Onshape Part Studio into Zither. The app displays the connected document context and feature list.
 5. Ask something like “What controls this extrusion?” or “Change the depth of Extrude 1 to 25 mm.”
 6. Zither reads the actual feature parameters, explains or performs the requested change, and reports the result returned by Onshape. The user sees the updated design in Onshape.
@@ -35,7 +35,7 @@ The desktop renderer presents chat, connections, document context, and tool acti
 
 The Zither server owns account authentication, desktop session handoff, Onshape OAuth token exchange and refresh, and authenticated CAD requests. It keeps the Onshape client secret out of the distributed desktop application. Neon stores application data; it is not the HTTP API or the authentication implementation.
 
-The model runs through Pi on the user's computer. Model requests go directly to the selected provider. Onshape context needed for a task is included in those requests. Model keys and ChatGPT credentials stay in operating-system-protected local storage. The server stores encrypted Onshape credentials and checks document requests against the signed-in user.
+The model runs through Pi on the user's computer. Model requests go directly to the selected provider. Onshape context needed for a task is included in those requests. Model keys and Codex credentials stay in operating-system-protected local storage. The server stores encrypted Onshape credentials and checks document requests against the signed-in user.
 
 ## Three independent connections
 
@@ -43,11 +43,11 @@ The model runs through Pi on the user's computer. Model requests go directly to 
 | --- | --- | --- |
 | Zither account | App identity and sessions | Better Auth with Google, GitHub, and username/password; Neon Postgres |
 | Onshape account | Permission to access CAD | Onshape OAuth authorization code flow handled by the server |
-| AI provider | Access to inference | Pi providers with local API keys or supported ChatGPT OAuth credentials |
+| AI provider | Access to inference | Pi providers with local API keys or Codex subscription OAuth credentials |
 
 All browser authentication opens in the system browser. Zither account login returns to the desktop through a short-lived, single-use code bound to a PKCE challenge and a validated loopback callback. OAuth state binds each authorization to the session that initiated it.
 
-For ChatGPT, validate the current supported Sign in with ChatGPT flow and its compatibility with Pi before wiring the button. The installed Pi provider catalog includes a legacy Codex OAuth provider; its presence alone does not establish the right distribution path for Zither. OpenAI documents ChatGPT plan usage for open-source, locally hosted apps and a separate access process for paid or remotely hosted offerings. Decide Zither's release model before shipping this integration. [OpenAI plan usage documentation](https://developers.openai.com/siwc/token-sharing-open-source)
+Codex is the subscription connection, using Pi's `openai-codex` provider for browser OAuth, token refresh, model selection, and inference. The separate direct ChatGPT sign-in has been removed. Verify live subscription inference and the release distribution path before shipping.
 
 ## First usable version
 
@@ -56,7 +56,7 @@ The first complete workflow is **connect an existing Part Studio, understand its
 - Account registration, sign-in, sign-out, and restoring a desktop session.
 - Onshape connection, token refresh, disconnect, and useful permission errors.
 - API key connection and model selection through Pi.
-- ChatGPT connection through a verified supported integration.
+- Codex subscription connection through Pi.
 - Explicit document selection by URL, with document/workspace/element IDs tracked together.
 - Streaming conversation, tool activity, cancellation, and starting a new chat.
 - Reading the feature tree and editable parameter expressions.
@@ -97,7 +97,7 @@ Register an Onshape OAuth application with the necessary read/write scopes and c
 
 ### 4 Pi conversation and model access
 
-Run Pi agent core locally with only the CAD tools. Add streaming, cancellation, provider/model selection, and protected local credential storage. Establish BYOK inference first, then implement and verify the supported ChatGPT sign-in path. Keep both behind the same provider interface.
+Run Pi agent core locally with only the CAD tools. Add streaming, cancellation, provider/model selection, and protected local credential storage. Verify BYOK and Codex subscription inference through Pi's provider interface.
 
 **Done when:** a real model can answer questions using the connected Part Studio, model credentials never reach the Zither server, and changing models or cancelling a response behaves predictably.
 
@@ -125,7 +125,7 @@ For undo, first establish how to restore a specific operation without overwritin
 
 Use unit tests for URL validation, PKCE/state handling, token encryption, feature payload preservation, and stale-edit rejection. Use server integration tests for account ownership, session expiry, OAuth failure paths, token refresh races, and Onshape response handling. Use a fake model provider for deterministic agent/tool integration tests.
 
-Complete manual end-to-end checks with test accounts and a disposable Onshape document for both BYOK and ChatGPT. Mocked tests cannot verify provider consent screens, account eligibility, or actual CAD rebuild behavior.
+Complete manual end-to-end checks with test accounts and a disposable Onshape document for both BYOK and Codex. Mocked tests cannot verify provider consent screens, account eligibility, or actual CAD rebuild behavior.
 
 ## Configuration needed
 
@@ -134,8 +134,8 @@ Complete manual end-to-end checks with test accounts and a disposable Onshape do
 - An Onshape OAuth application and registered callback URLs.
 - Server authentication and token encryption secrets.
 - An email service for account verification and recovery before public launch.
-- A model API key and a ChatGPT account suitable for testing their respective flows.
-- A decision on open-source/local distribution versus a paid product, to choose the supported ChatGPT integration path.
+- A model API key and an account with Codex subscription access for testing their respective flows.
+- A release distribution decision and verification of the chosen provider integration before shipping.
 
 No real credentials belong in Git. `.env.example` is a configuration template.
 
